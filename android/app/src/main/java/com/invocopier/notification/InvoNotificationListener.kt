@@ -147,12 +147,9 @@ class InvoNotificationListener : NotificationListenerService() {
             p.put("isBroadcast", try { pi.isBroadcast } catch (t: Throwable) { false })
             p.put("isService", try { pi.isService } catch (t: Throwable) { false })
             // Unwrapping is only possible when the creator allowed fill-in; a failure here is normal.
-            p.put("unwrap", try {
-                val i = pi.getActivity(android.content.Intent())
-                (i.component?.flattenToShortString() ?: "") + " data=" + (i.dataString ?: "") + " action=" + (i.action ?: "")
-            } catch (t: Throwable) {
-                "UNWRITABLE(" + t.javaClass.simpleName + ")"
-            })
+            // Android deliberately hides PendingIntent.getActivity(), so the target
+            // cannot be read by any app. The only honest test is to actually send it.
+            p.put("unwrap", "not possible by design - use the 'Test open trade' button, which calls send() and shows what INVO opens")
             o.put("contentIntent", p)
         }
 
