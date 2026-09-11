@@ -38,7 +38,7 @@ Button desc="Mimic Tab 3 of 5"         -> Mimic page
 ```
 Also present: `View desc=Create [click]` (composer, never touch it).
 
-## How we will read events (METHOD 4, confirmed viable)
+## Backup path: read the feed (METHOD 4) - confirmed viable
 
 1. Make sure INVO is foreground (`getLaunchIntentForPackage`), on the feed
    (`clickByDescContains("Notifications Tab 4 of 5")`).
@@ -49,8 +49,17 @@ Also present: `View desc=Create [click]` (composer, never touch it).
 
 ## Caveats found in the real data (these change the design)
 
-1. **No system notification was ever seen** (`INVO notifications today: 0`, while 15
-   other apps posted). The feed is therefore the primary source, not a fallback.
+1. **INVO does post system notifications** - proved by Android's own per-channel
+   counters on Settings -> Apps -> Invo -> Notifications:
+   - `All Invo notifications` = ON
+   - `Miscellaneous` - **~9 notifications per day**  (this is the trade-alert stream)
+   - `High Importance Notifications` - ~1 per week
+   Our 35-second Phase-1 window simply missed them, which is why the log said 0.
+   ~9 per day means one every 2-3 hours, so any feasibility test must run for hours,
+   not seconds. **METHOD 1 is therefore the primary trigger** (event arrives pushed,
+   ~0 latency) and the feed watcher is the backup/verification path. The first real
+   capture will show whether the title/text is informative or generic, and whether
+   `contentIntent` jumps straight to the trade page (METHOD 2).
 2. **Age is hour-granular** (`9h`, `16h`, `1d`) — the feed label cannot tell us how
    stale a signal is to the minute. So "seconds between trader action and our action"
    is unmeasurable from the feed; we measure poll-cycle latency and treat any item

@@ -128,6 +128,17 @@ object FeedWatcher {
             return 3000L
         }
 
+        val pm = app.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+        val awake = try {
+            pm == null || pm.isInteractive
+        } catch (t: Throwable) {
+            true
+        }
+        if (!awake) {
+            statusLine = "feed watch: running, screen is off"
+            return intervalMs
+        }
+
         var rows = onMain<List<String>> { svc.collectFeedRows() } ?: emptyList()
 
         if (rows.isEmpty() && autoOpen) {
@@ -139,6 +150,7 @@ object FeedWatcher {
         }
 
         polls++
+        heartbeat()
         if (rows.isEmpty()) {
             val fg = onMain<String> { svc.foregroundPackage() } ?: "?"
             statusLine = "feed watch: running, no feed rows visible (foreground=" + fg + ")"
@@ -176,6 +188,16 @@ object FeedWatcher {
             i--
         }
         return intervalMs
+    }
+
+    /** Proof-of-life so a day-long unattended run can be verified afterwards. */
+    private fun heartbeat() {
+        if (polls % 60 == 0) {
+            EventLog.line(
+                "WATCH_HEARTBEAT polls=" + polls + " events=" + events +
+                    " remembered=" + seen.size + " " + statusLine
+            )
+        }
     }
 
     private fun emit(row: String, cfg: CopierConfig) {
