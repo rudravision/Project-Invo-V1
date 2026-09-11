@@ -95,29 +95,8 @@ object Rehearsal {
         // Always tap the Notifications tab first: INVO opens on its trader
         // leaderboard, where clickable @handles also appear (as trader cards, not
         // events). Tapping an already-selected tab is a no-op, so this is safe.
-        val navOk = onMain<Boolean> {
-            InvoAccessibilityService.instance?.clickByTextOrDesc("Notifications Tab")
-        } ?: false
-        if (navOk) sleep(1800)
-        var rows = readRows()
-        if (rows.isEmpty()) {
-            out.append("step 2: nothing readable yet - re-opening INVO and trying the tab once more\n")
-            openInvo(app, cfg.invoPackage)
-            sleep(2500)
-            onMain<Boolean> {
-                InvoAccessibilityService.instance?.clickByTextOrDesc("Notifications Tab")
-            }
-            sleep(1800)
-            rows = readRows()
-        }
-        if (rows.isEmpty()) {
-            out.append("step 2: REFUSED - INVO's screen gave back no readable rows at all.\n")
-            appendScreenPeek(out)
-            finish(out)
-            return
-        }
-        out.append("step 2: ").append(rows.size).append(" clickable rows on screen (tab tap ")
-            .append(if (navOk) "worked" else "not needed / not found").append(")\n")
+        var rows = goToFeed(cfg, out)
+        out.append("step 2: ").append(rows.size).append(" clickable rows after navigating\n")
         appendPageHint(out)
         var rowIdx = 0
         for (r in rows) {
@@ -185,8 +164,28 @@ object Rehearsal {
             finish(out)
             return
         }
-        val page = ScreenParser.parse(snap, sig.row)
+        var page = ScreenParser.parse(snap, sig.row)
         out.append("step 5: page pkg=").append(snap.pkg).append(" nodes=").append(snap.nodeCount).append('\n')
+        if (!page.hasBasics()) {
+            val scrolled = onMain<Boolean> { InvoAccessibilityService.instance?.scrollForward() } ?: false
+            sleep(1200)
+            val again = onMain<InvoAccessibilityService.ScreenSnapshot> {
+                InvoAccessibilityService.instance?.readScreen()
+            }
+            if (scrolled && again != null && again.nodes.isNotEmpty()) {
+                val p2 = ScreenParser.parse(again, sig.row)
+                val before = page.missing.size
+                if (p2.missing.size < before) {
+                    page = p2
+                    out.append("         scrolled once and found more: missing went from ").append(before)
+                        .append(" field(s) to ").append(page.missing.size).append('\n')
+                } else {
+                    out.append("         scrolled once; nothing new was readable\n")
+                }
+            } else {
+                out.append("         page does not scroll, so what we see is all there is\n")
+            }
+        }
         out.append(page.summary()).append('\n')
 
         // ---- 5. verdict + evidence ----
@@ -234,6 +233,35 @@ object Rehearsal {
             InvoAccessibilityService.instance?.readScreen()
         } ?: return
         out.append("         page reads as: ").append(ScreenParser.pageHint(snap)).append('\n')
+    }
+
+    /**
+     * Reach INVO's event feed, retrying: right after launch the bottom navigation
+     * is often not drawn yet, and a single blind tap is not enough.
+     */
+    private fun goToFeed(cfg: CopierConfig, out: StringBuilder): List<String> {
+        // cfg is kept here so navigation and feed reading stay in one place for Phase 4
+        var best: List<String> = emptyList()
+        var attempt = 0
+        while (attempt < 4) {
+            attempt++
+            val tapped = onMain<Boolean> {
+                val svc = InvoAccessibilityService.instance ?: return@onMain false
+                svc.clickByTextOrDesc("Notifications Tab") || svc.clickByTextOrDesc("Notification")
+            } ?: false
+            sleep(1500)
+            val rows = readRows()
+            if (rows.any { isEventRow(it) }) {
+                out.append("         event feed reached on attempt ").append(attempt)
+                    .append(if (tapped) " (nav tap worked)" else " (already there)").append('\n')
+                return rows
+            }
+            if (rows.size > best.size) best = rows
+            out.append("         attempt ").append(attempt).append(": ").append(rows.size)
+                .append(" rows, no events (nav tap ").append(if (tapped) "accepted" else "nothing found").append(")\n")
+            sleep(1200)
+        }
+        return best
     }
 
     private fun readRows(): List<String> =

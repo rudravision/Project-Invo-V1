@@ -329,6 +329,42 @@ class InvoAccessibilityService : AccessibilityService() {
         return null
     }
 
+    /**
+     * Scroll the page once. Used only when a field we need sits below the fold,
+     * so a missing value is not mistaken for an unreadable app.
+     */
+    fun scrollForward(): Boolean {
+        val root = try {
+            rootInActiveWindow
+        } catch (t: Throwable) {
+            null
+        } ?: return false
+        val target = findScrollable(root, 0) ?: return false
+        return try {
+            target.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    private fun findScrollable(node: AccessibilityNodeInfo?, depth: Int): AccessibilityNodeInfo? {
+        if (node == null || depth > 25) return null
+        val ok = try {
+            node.isScrollable
+        } catch (t: Throwable) {
+            false
+        }
+        if (ok) return node
+        val cc = node.childCount
+        var c = 0
+        while (c < cc) {
+            val found = findScrollable(node.getChild(c), depth + 1)
+            if (found != null) return found
+            c++
+        }
+        return null
+    }
+
     /** System back key, used to leave a page we only opened to look at. */
     fun goBack(): Boolean = try {
         performGlobalAction(GLOBAL_ACTION_BACK)
