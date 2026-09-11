@@ -156,3 +156,17 @@ data class ParsedEvent(
         }
     }
 }
+
+/**
+ * Entry point for everything that wants to know what a notification means.
+ * Detection only: this object cannot click, swipe or submit anything.
+ */
+object InvoEventParser {
+
+    fun parse(
+        text: String,
+        packageName: String,
+        notificationId: Int,
+        postTime: Long
+    ): ParsedEvent = ParsedEvent.parse(text, packageName, notificationId, postTime)
+}

@@ -148,7 +148,7 @@ class InvoNotificationListener : NotificationListenerService() {
             p.put("isService", try { pi.isService } catch (t: Throwable) { false })
             // Unwrapping is only possible when the creator allowed fill-in; a failure here is normal.
             p.put("unwrap", try {
-                val i = pi.activity
+                val i = pi.getActivity(android.content.Intent())
                 (i.component?.flattenToShortString() ?: "") + " data=" + (i.dataString ?: "") + " action=" + (i.action ?: "")
             } catch (t: Throwable) {
                 "UNWRITABLE(" + t.javaClass.simpleName + ")"
@@ -162,8 +162,7 @@ class InvoNotificationListener : NotificationListenerService() {
             for (a in acts) {
                 val aj = JSONObject()
                 aj.put("title", a.title?.toString() ?: "")
-                aj.put("hasIntent", a.intent != null)
-                aj.put("action", a.intent?.action ?: "")
+                aj.put("class", a.javaClass.simpleName)
                 arr.put(aj)
             }
             o.put("actions", arr)
