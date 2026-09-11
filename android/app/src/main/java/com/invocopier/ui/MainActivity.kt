@@ -269,6 +269,6 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val CHANNEL = "invo_copier_test"
         /** Bump this with every published change so it is obvious on screen which build is installed. */
-        const val APP_BUILD = "P1.4"
+        const val APP_BUILD = "P1.5"
     }
 }
