@@ -25,7 +25,7 @@ def find_adb():
         os.path.join(home, "Library", "Android", "sdk", "platform-tools", "adb"),
         os.path.join(home, "Android", "Sdk", "platform-tools", "adb.exe"),
         os.path.join(home, "Android", "Sdk", "platform-tools", "adb"),
-        r"C:\Users\%USERNAME%\AppData\Local\Android\Sdk\platform-tools\adb.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe"),
     ]
     found = shutil.which("adb")
     if found:
