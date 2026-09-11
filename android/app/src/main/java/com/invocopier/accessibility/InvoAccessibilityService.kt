@@ -189,6 +189,153 @@ class InvoAccessibilityService : AccessibilityService() {
         return null
     }
 
+    /**
+     * One readable node with its geometry, for the parsers. Bounds are included so
+     * that a later phase can act on a slider if it ever has to, but nothing here
+     * presses anything by itself.
+     */
+    class NodeRec(
+        val cls: String,
+        val id: String,
+        val text: String,
+        val desc: String,
+        val clickable: Boolean,
+        val left: Int,
+        val top: Int,
+        val right: Int,
+        val bottom: Int
+    ) {
+        val label: String get() = if (text.isNotBlank()) text else desc
+
+        fun boundsText(): String = "(" + left + "," + top + "-" + right + "," + bottom + ")"
+    }
+
+    class ScreenSnapshot(val pkg: String, val nodeCount: Int, val nodes: List<NodeRec>)
+
+    /** Read the whole foreground screen as data. Nothing is clicked or scrolled. */
+    fun readScreen(): ScreenSnapshot {
+        val root = try {
+            rootInActiveWindow
+        } catch (t: Throwable) {
+            null
+        } ?: return ScreenSnapshot("", 0, emptyList())
+        val out = ArrayList<NodeRec>()
+        val n = readWalk(root, out, 0)
+        return ScreenSnapshot(root.packageName?.toString() ?: "", n, out)
+    }
+
+    private fun readWalk(node: AccessibilityNodeInfo?, out: ArrayList<NodeRec>, idxIn: Int): Int {
+        var idx = idxIn
+        if (node == null || idx >= MAX_NODES) return idx
+        idx++
+        try {
+            val cls = node.className?.toString()?.substringAfterLast('.') ?: "?"
+            val txt = try {
+                node.text?.toString()?.trim() ?: ""
+            } catch (t: Throwable) {
+                ""
+            }
+            val dsc = try {
+                node.contentDescription?.toString()?.trim() ?: ""
+            } catch (t: Throwable) {
+                ""
+            }
+            val clk = try {
+                node.isClickable
+            } catch (t: Throwable) {
+                false
+            }
+            val vid = try {
+                (node.viewIdResourceName ?: "").substringAfterLast('/')
+            } catch (t: Throwable) {
+                ""
+            }
+            var l = 0
+            var t0 = 0
+            var r = 0
+            var b = 0
+            try {
+                val rect = android.graphics.Rect()
+                node.getBoundsInScreen(rect)
+                l = rect.left
+                t0 = rect.top
+                r = rect.right
+                b = rect.bottom
+            } catch (t: Throwable) {
+                // bounds stay zero
+            }
+            if (txt.isNotBlank() || dsc.isNotBlank() || clk) {
+                out.add(
+                    NodeRec(cls, vid, txt.replace('\n', ' '), dsc.replace('\n', ' '), clk, l, t0, r, b)
+                )
+            }
+        } catch (t: Throwable) {
+            // ignore one bad node
+        }
+        val cc = try {
+            node.childCount
+        } catch (t: Throwable) {
+            0
+        }
+        var c = 0
+        while (c < cc && idx < MAX_NODES) {
+            idx = readWalk(node.getChild(c), out, idx)
+            c++
+        }
+        return idx
+    }
+
+    /** Semantic click on anything whose text or description contains [needle]. */
+    fun clickByTextOrDesc(needle: String): Boolean {
+        val root = try {
+            rootInActiveWindow
+        } catch (t: Throwable) {
+            null
+        } ?: return false
+        val node = findClickableText(root, needle, 0) ?: return false
+        return try {
+            node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    private fun findClickableText(
+        node: AccessibilityNodeInfo?,
+        needle: String,
+        depth: Int
+    ): AccessibilityNodeInfo? {
+        if (node == null || depth > 30) return null
+        val t = try {
+            node.text?.toString() ?: ""
+        } catch (e: Throwable) {
+            ""
+        }
+        val d = try {
+            node.contentDescription?.toString() ?: ""
+        } catch (e: Throwable) {
+            ""
+        }
+        if ((t.contains(needle, ignoreCase = true) || d.contains(needle, ignoreCase = true)) && node.isClickable) {
+            return node
+        }
+        val cc = node.childCount
+        var c = 0
+        while (c < cc) {
+            val found = findClickableText(node.getChild(c), needle, depth + 1)
+            if (found != null) return found
+            c++
+        }
+        return null
+    }
+
+    /** System back key, used to leave a page we only opened to look at. */
+    fun goBack(): Boolean = try {
+        performGlobalAction(GLOBAL_ACTION_BACK)
+    } catch (t: Throwable) {
+        false
+    }
+
     private fun tiny(s: String): String {
         val f = s.replace('\n', ' ').trim()
         return if (f.length > 90) f.substring(0, 90) + ".." else f

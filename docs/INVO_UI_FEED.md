@@ -70,3 +70,18 @@ Also present: `View desc=Create [click]` (composer, never touch it).
    trade identity comes from the detail page (Phase 3), not the feed row.
 4. Feed rows carry no direction/leverage/price. Those must come from the detail
    screen, which we have not captured yet (next data needed).
+
+## How Phases 3+ are measured from the phone only (build P1.4)
+
+No PC is involved in gathering data any more. Two buttons:
+
+| Button | What it does | What comes back |
+|---|---|---|
+| 11. SNAP 5 PAGES | photographs whatever screen is in front, every 8 s, 5 times, while you walk through INVO | per page: package, node count, and every line containing trade words, with bounds and whether it is tappable |
+| 12. READ TOP TRADE | opens the newest feed row from an approved trader, reads the page, presses nothing, goes back | asset / direction / leverage / entry, the Mimic control and its bounds, plus a "MISSING:" list |
+
+Both write into the same result text, so 8. COPY RESULT carries everything to me in one paste.
+Snapshots and node trees are also saved under the app's external `dumps/` folder for deep dives.
+
+`12` deliberately stops at "read": this build contains no swipe and no gesture code,
+so it cannot open, size or close a position by itself.

@@ -24,7 +24,10 @@ import androidx.core.content.ContextCompat
 import com.invocopier.R
 import com.invocopier.accessibility.InvoAccessibilityService
 import com.invocopier.config.CopierConfig
+import com.invocopier.diagnostics.CaptureTool
 import com.invocopier.diagnostics.Phase1SelfTest
+import com.invocopier.diagnostics.Rehearsal
+import com.invocopier.diagnostics.Report
 import com.invocopier.config.KillSwitch
 import com.invocopier.logging.EventLog
 import com.invocopier.notification.InvoNotificationListener
@@ -85,7 +88,11 @@ class MainActivity : AppCompatActivity() {
             render()
         }
         findViewById<Button>(R.id.btnCopyResult).setOnClickListener {
-            copy(Phase1SelfTest.summary + "\n\n" + FeedWatcher.report(this), "Phase 1 + 2 result")
+            copy(
+                "app build : " + APP_BUILD + "\n\n" + Phase1SelfTest.summary + "\n\n" +
+                    Report.combined() + "\n\n" + FeedWatcher.report(this),
+                "result"
+            )
             logText.text = Phase1SelfTest.summary
         }
         findViewById<Button>(R.id.btnWatch).setOnClickListener {
@@ -102,6 +109,16 @@ class MainActivity : AppCompatActivity() {
             if (FeedWatcher.running) FeedWatcher.stop()
             FeedWatcher.start(applicationContext, 5, true)
             toast("Watching and re-opening INVO when needed")
+            render()
+        }
+        findViewById<Button>(R.id.btnSnap).setOnClickListener {
+            CaptureTool.start(applicationContext, 5, 8)
+            toast("Now go to INVO. It photographs a screen every 8 seconds - tap through feed, a trade, the Mimic page, your positions.")
+            render()
+        }
+        findViewById<Button>(R.id.btnRehearse).setOnClickListener {
+            Rehearsal.start(applicationContext)
+            toast("Opening the newest trade from your traders and reading it. Nothing is pressed.")
             render()
         }
         findViewById<Button>(R.id.btnCopyLogs).setOnClickListener {
@@ -151,6 +168,7 @@ class MainActivity : AppCompatActivity() {
         sb.append("Kill switch    : ").append(if (KillSwitch.isEngaged(this)) "STOPPED (safe)" else "RUNNING").append('\n')
         sb.append("Log folder     : ").append(EventLog.logDir()).append('\n')
         sb.append("Feed watch     : ").append(FeedWatcher.statusLine).append('\n')
+        sb.append("Last dry-run   : ").append(Rehearsal.lastVerdict).append('\n')
         statusText.text = sb.toString()
 
         killButton.text = if (KillSwitch.isEngaged(this)) "STOP ENGAGED — nothing will trade" else "STOP RELEASED — tap to halt"
@@ -251,6 +269,6 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val CHANNEL = "invo_copier_test"
         /** Bump this with every published change so it is obvious on screen which build is installed. */
-        const val APP_BUILD = "P1.3"
+        const val APP_BUILD = "P1.4"
     }
 }
