@@ -24,6 +24,7 @@ import androidx.core.content.ContextCompat
 import com.invocopier.R
 import com.invocopier.accessibility.InvoAccessibilityService
 import com.invocopier.config.CopierConfig
+import com.invocopier.diagnostics.Phase1SelfTest
 import com.invocopier.config.KillSwitch
 import com.invocopier.logging.EventLog
 import com.invocopier.notification.InvoNotificationListener
@@ -76,6 +77,15 @@ class MainActivity : AppCompatActivity() {
             EventLog.line("METHOD2_REPLAY $r")
             Toast.makeText(this, r, Toast.LENGTH_LONG).show()
             render()
+        }
+        findViewById<Button>(R.id.btnFullTest).setOnClickListener {
+            Phase1SelfTest.start(applicationContext)
+            Toast.makeText(this, "Go to INVO now and tap through it for 35 seconds.", Toast.LENGTH_LONG).show()
+            render()
+        }
+        findViewById<Button>(R.id.btnCopyResult).setOnClickListener {
+            copy(Phase1SelfTest.summary, "Phase 1 result")
+            logText.text = Phase1SelfTest.summary
         }
         findViewById<Button>(R.id.btnCopyLogs).setOnClickListener {
             copy(EventLog.dumpAll(), "all logs")
