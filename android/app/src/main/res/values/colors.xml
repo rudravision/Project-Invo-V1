@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="safe">#0F9D58</color>
+    <color name="danger">#D93025</color>
+    <color name="logBg">#0B0F14</color>
+    <color name="logFg">#D6E2EA</color>
+</resources>

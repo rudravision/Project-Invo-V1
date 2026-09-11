@@ -1,0 +1,19 @@
+{
+  "invo_package": "com.involio.app",
+  "package_keyword": "invo",
+  "capture_all_packages": true,
+  "DRY_RUN": true,
+  "AUTOTRADING_ENABLED": false,
+  "COPY_EXACT_LEVERAGE": false,
+  "MAX_LEVERAGE": 5,
+  "MAX_POSITION_USD": 10,
+  "MAX_TOTAL_EXPOSURE_USD": 30,
+  "MAX_DAILY_LOSS_USD": 20,
+  "MAX_OPEN_POSITIONS": 3,
+  "allowed_assets": [],
+  "traders": {
+    "@bones": { "enabled": true, "allocation_percent": 3 },
+    "@luxora": { "enabled": true, "allocation_percent": 3 },
+    "@booobsas": { "enabled": true, "allocation_percent": 3 }
+  }
+}
