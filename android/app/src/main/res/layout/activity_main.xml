@@ -112,6 +112,28 @@
             android:textSize="10sp" />
     </LinearLayout>
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btnWatch"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="9. WATCH INVO FEED"
+            android:textSize="10sp" />
+
+        <Button
+            android:id="@+id/btnWatchOpen"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="10. WATCH + OPEN INVO"
+            android:textSize="10sp" />
+    </LinearLayout>
+
     <Button
         android:id="@+id/killButton"
         android:layout_width="match_parent"

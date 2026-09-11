@@ -120,6 +120,75 @@ class InvoAccessibilityService : AccessibilityService() {
         return i
     }
 
+    fun foregroundPackage(): String = try {
+        rootInActiveWindow?.packageName?.toString() ?: ""
+    } catch (t: Throwable) {
+        ""
+    }
+
+    /**
+     * Feed rows = clickable nodes whose contentDescription contains an @handle.
+     * Returned top-to-bottom, which for INVO means newest-first.
+     */
+    fun collectFeedRows(): List<String> {
+        val root = try { rootInActiveWindow } catch (t: Throwable) { null } ?: return emptyList()
+        val out = ArrayList<Pair<Int, String>>()
+        walkFeed(root, out, 0)
+        return out.sortedBy { it.first }.map { it.second }
+    }
+
+    private fun walkFeed(node: AccessibilityNodeInfo?, out: ArrayList<Pair<Int, String>>, guardIn: Int): Int {
+        var guard = guardIn
+        if (node == null || guard > 4000) return guard
+        guard++
+        try {
+            val d = node.contentDescription?.toString() ?: ""
+            if (d.contains("@") && node.isClickable) {
+                val r = android.graphics.Rect()
+                node.getBoundsInScreen(r)
+                out.add(Pair(r.top, d.replace('\n', ' ').trim()))
+            }
+        } catch (t: Throwable) {
+            // ignore one bad node
+        }
+        val cc = node.childCount
+        var c = 0
+        while (c < cc && guard <= 4000) {
+            guard = walkFeed(node.getChild(c), out, guard)
+            c++
+        }
+        return guard
+    }
+
+    /** Semantic click: find a clickable node by its description and tap it. */
+    fun clickByDescContains(needle: String): Boolean {
+        val root = try { rootInActiveWindow } catch (t: Throwable) { null } ?: return false
+        val node = findClickableByDesc(root, needle, 0) ?: return false
+        return try {
+            node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
+    private fun findClickableByDesc(
+        node: AccessibilityNodeInfo?,
+        needle: String,
+        depth: Int
+    ): AccessibilityNodeInfo? {
+        if (node == null || depth > 30) return null
+        val d = try { node.contentDescription?.toString() ?: "" } catch (t: Throwable) { "" }
+        if (d.contains(needle, ignoreCase = true) && node.isClickable) return node
+        val cc = node.childCount
+        var c = 0
+        while (c < cc) {
+            val found = findClickableByDesc(node.getChild(c), needle, depth + 1)
+            if (found != null) return found
+            c++
+        }
+        return null
+    }
+
     private fun tiny(s: String): String {
         val f = s.replace('\n', ' ').trim()
         return if (f.length > 90) f.substring(0, 90) + ".." else f

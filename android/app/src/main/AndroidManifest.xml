@@ -60,6 +60,15 @@
             </intent-filter>
         </receiver>
 
+        <!-- PHASE 2: start/stop the read-only feed watcher from a PC command. -->
+        <receiver
+            android:name=".watch.WatchCommandReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.invocopier.WATCH" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>

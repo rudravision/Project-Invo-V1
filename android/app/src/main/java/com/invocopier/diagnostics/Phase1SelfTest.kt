@@ -182,9 +182,16 @@ object Phase1SelfTest {
     private fun firstTexts(tree: String): String {
         val found = ArrayList<String>()
         for (raw in tree.split('\n')) {
-            val idx = raw.indexOf("text=")
+            var idx = raw.indexOf("text=")
+            var take = 5
+            if (idx < 0) {
+                idx = raw.indexOf("desc=")
+                take = 5
+            }
             if (idx >= 0) {
-                val v = raw.substring(idx + 5).trim()
+                var v = raw.substring(idx + take).trim()
+                v = v.substringBefore(" bounds=").trim()
+                if (v.length > 70) v = v.substring(0, 70) + ".."
                 if (v.isNotEmpty() && !found.contains(v)) {
                     found.add(v)
                     if (found.size >= 4) break

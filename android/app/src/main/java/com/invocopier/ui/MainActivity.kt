@@ -28,6 +28,7 @@ import com.invocopier.diagnostics.Phase1SelfTest
 import com.invocopier.config.KillSwitch
 import com.invocopier.logging.EventLog
 import com.invocopier.notification.InvoNotificationListener
+import com.invocopier.watch.FeedWatcher
 
 class MainActivity : AppCompatActivity() {
 
@@ -84,8 +85,24 @@ class MainActivity : AppCompatActivity() {
             render()
         }
         findViewById<Button>(R.id.btnCopyResult).setOnClickListener {
-            copy(Phase1SelfTest.summary, "Phase 1 result")
+            copy(Phase1SelfTest.summary + "\n\n" + FeedWatcher.report(this), "Phase 1 + 2 result")
             logText.text = Phase1SelfTest.summary
+        }
+        findViewById<Button>(R.id.btnWatch).setOnClickListener {
+            if (FeedWatcher.running) {
+                FeedWatcher.stop()
+                toast("Feed watch stopped")
+            } else {
+                FeedWatcher.start(applicationContext, 5, false)
+                toast("Watching INVO feed - keep INVO open on its Notifications page")
+            }
+            render()
+        }
+        findViewById<Button>(R.id.btnWatchOpen).setOnClickListener {
+            if (FeedWatcher.running) FeedWatcher.stop()
+            FeedWatcher.start(applicationContext, 5, true)
+            toast("Watching and re-opening INVO when needed")
+            render()
         }
         findViewById<Button>(R.id.btnCopyLogs).setOnClickListener {
             copy(EventLog.dumpAll(), "all logs")
@@ -133,6 +150,7 @@ class MainActivity : AppCompatActivity() {
         sb.append("Mode           : ").append(if (config.dryRun) "DRY_RUN" else "LIVE").append("  autotrading=").append(config.autoTradingEnabled).append('\n')
         sb.append("Kill switch    : ").append(if (KillSwitch.isEngaged(this)) "STOPPED (safe)" else "RUNNING").append('\n')
         sb.append("Log folder     : ").append(EventLog.logDir()).append('\n')
+        sb.append("Feed watch     : ").append(FeedWatcher.statusLine).append('\n')
         statusText.text = sb.toString()
 
         killButton.text = if (KillSwitch.isEngaged(this)) "STOP ENGAGED — nothing will trade" else "STOP RELEASED — tap to halt"
@@ -233,6 +251,6 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val CHANNEL = "invo_copier_test"
         /** Bump this with every published change so it is obvious on screen which build is installed. */
-        const val APP_BUILD = "P1.2"
+        const val APP_BUILD = "P1.3"
     }
 }
