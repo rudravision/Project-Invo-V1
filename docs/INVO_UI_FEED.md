@@ -85,3 +85,35 @@ Snapshots and node trees are also saved under the app's external `dumps/` folder
 
 `12` deliberately stops at "read": this build contains no swipe and no gesture code,
 so it cannot open, size or close a position by itself.
+
+## The real execution surface: a trader's trade cards (captured 2026-09-11, build P1.4)
+
+INVO opens on its trader list, not on the notification feed. Tapping a trader card
+(`@bones`) opens their page, and *that* page is where the money data lives. Verbatim,
+two clickable cards from your phone:
+
+```
+btc 40x short $77,713.00 +5.30% exit price $77,610.00 hold time 8 minutes     (50,603-1030,968)
+btc 40x short $77,672.00 +6.26% $77,550.50                                    (50,1375-1030,1705)
+mimic trade                                                                    (90,1565-990,1665)
+```
+
+Measured facts, in order of how much they change the design:
+
+1. **One node holds the whole trade.** asset, leverage, direction, entry price, PnL,
+   exit price and hold time arrive as a single `contentDescription` string. No page
+   walking, no OCR, no opening a detail screen to get the numbers.
+2. **The card that still has an open trade carries its own `Mimic Trade` button,
+   inside the card's own bounds.** The closed card (the one with `exit price`) has no
+   button. So "open trade" and "here is how you copy it" are structurally linked, and
+   a card can be matched to its button by geometry rather than by layout guessing.
+3. The bottom nav is present on these pages as `Button desc="Mimic Tab 3 of 5"`, i.e.
+   the same semantic labelling as the Notifications tab, so navigation stays by label.
+4. Cards look like `"<asset> <lev>x <long|short> $<entry> [<pnl>%] [exit price $<x>]
+   [hold time <n> <unit>]"` - one regex, and any INVO wording change shows up as an
+   explicit "no card matched" verdict instead of a silent wrong number.
+
+Consequence for the phases: the Notifications feed is demoted to a *trigger* (it tells
+us which trader moved, nothing more); the trader page is where every number is read and
+where `Mimic Trade` is pressed. `MovesReader` parses these cards and pairs each with its
+button; `Rehearsal.profilePath` uses it, locates only, and never taps the button.

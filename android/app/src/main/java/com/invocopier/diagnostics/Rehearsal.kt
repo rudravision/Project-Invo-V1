@@ -8,6 +8,7 @@ import com.invocopier.accessibility.InvoAccessibilityService
 import com.invocopier.config.CopierConfig
 import com.invocopier.config.KillSwitch
 import com.invocopier.logging.EventLog
+import com.invocopier.parser.MovesReader
 import com.invocopier.parser.ScreenParser
 import com.invocopier.parser.TradePage
 import com.invocopier.watch.FeedParser
@@ -108,10 +109,19 @@ object Rehearsal {
         val events = ArrayList<String>()
         for (r in rows) if (isEventRow(r)) events.add(r)
         if (events.isEmpty()) {
-            out.append("\nstep 3: REFUSED - none of these rows is a trade event, so we are not on the ")
-                .append("Notifications feed. Tap 11 to photograph the pages, or open INVO's Notifications ")
-                .append("page yourself and press 12 again.\n")
-            finish(out)
+            // INVO's trader cards carry every number we need, and each open card has
+            // its own Mimic Trade button, so a trader page is a better target than the
+            // notification feed when no fresh event happens to be on screen.
+            val cardRow = firstApprovedCard(rows, cfg)
+            if (cardRow == null) {
+                out.append("\nstep 3: REFUSED - this page has neither a trade event nor a trader from ")
+                    .append("your list (")
+                    .append(cfg.traders.keys.joinToString(", ").ifEmpty { "none configured" })
+                    .append("). Tap 11 to photograph the pages, or open the Notifications page and press 12.\n")
+                finish(out)
+                return
+            }
+            profilePath(app, cfg, cardRow, out)
             return
         }
 
@@ -262,6 +272,105 @@ object Rehearsal {
             sleep(1200)
         }
         return best
+    }
+
+    private fun handleOf(row: String): String =
+        Regex("@([A-Za-z0-9_.]{2,32})").find(row)?.value?.lowercase() ?: ""
+
+    /** A clickable trader card on INVO's list, for a trader you approved. */
+    private fun firstApprovedCard(rows: List<String>, cfg: CopierConfig): String? {
+        for (r in rows) {
+            if (isEventRow(r)) continue
+            val h = handleOf(r)
+            if (h.isNotEmpty() && cfg.isTraderWhitelisted(h)) return r
+        }
+        return null
+    }
+
+    /**
+     * Open an approved trader's page and read their trade cards. Nothing is pressed:
+     * the Mimic button is located and reported, never tapped, in this build.
+     */
+    private fun profilePath(app: Context, cfg: CopierConfig, cardRow: String, out: StringBuilder) {
+        out.append("\nstep 3: no fresh event on this page, but ").append(handleOf(cardRow))
+            .append(" is on your approved list - opening their trades instead.\n")
+        val key = if (cardRow.length > 55) cardRow.substring(0, 55) else cardRow
+        val tapped = onMain<Boolean> {
+            InvoAccessibilityService.instance?.clickByDescContains(key)
+        } ?: false
+        if (!tapped) {
+            out.append("step 4: REFUSED - that trader's card did not accept a tap.\n")
+            finish(out)
+            return
+        }
+        sleep(2600)
+        val snap = onMain<InvoAccessibilityService.ScreenSnapshot> {
+            InvoAccessibilityService.instance?.readScreen()
+        }
+        if (snap == null || snap.nodes.isEmpty()) {
+            out.append("step 4: REFUSED - their page gave back no readable nodes.\n")
+            goBack()
+            finish(out)
+            return
+        }
+        val cards = MovesReader.read(snap)
+        out.append("step 4: their page read (pkg=").append(snap.pkg).append(", nodes=").append(snap.nodeCount)
+            .append(") - ").append(cards.size).append(" trade card(s) matched\n")
+        var openCount = 0
+        var idx = 0
+        for (c in cards) {
+            idx++
+            if (idx > 8) break
+            if (c.open) openCount++
+            out.append("   card ").append(idx).append(": ").append(c.oneLine()).append('\n')
+        }
+        val target = cards.firstOrNull { it.open && it.mimicFound }
+        out.append("step 5: verdict - ")
+        when {
+            cards.isEmpty() -> out.append(
+                "no card matched my pattern here. Everything readable is listed below so I can fix the wording."
+            )
+            openCount == 0 -> out.append(
+                "this trader has no open trade on screen right now, so there is nothing to copy. Not a fault."
+            )
+            target == null -> out.append(
+                "an open trade was read but its Mimic button was not located on this screen - it may need one scroll."
+            )
+            else -> out.append("READY: ")
+                .append(target.asset).append(" ").append(target.direction)
+                .append(" at ").append(target.leverage).append("x with a Mimic button in reach. ")
+                .append("Next build can size the order and stop before the swipe.")
+        }
+        if (target != null) {
+            out.append("\n   target card text: ").append(tiny(target.raw)).append('\n')
+            out.append("   ").append(target.mimicLine).append('\n')
+            val o = JSONObject()
+            o.put("ev", "MOVE_READY")
+            o.put("trader", handleOf(cardRow))
+            o.put("asset", target.asset)
+            o.put("direction", target.direction)
+            o.put("leverage", target.leverage)
+            o.put("entry", target.entry)
+            o.put("pnl", target.pnl)
+            o.put("mimic", target.mimicLine)
+            EventLog.json(o)
+        } else if (cards.isNotEmpty()) {
+            val o = JSONObject()
+            o.put("ev", "MOVE_SCAN")
+            o.put("trader", handleOf(cardRow))
+            o.put("cards", cards.size)
+            o.put("open", openCount)
+            o.put("mimicLocated", false)
+            EventLog.json(o)
+        }
+        if (target == null) {
+            out.append("\nwhat the page says:\n")
+            for (l in ScreenParser.readableLines(snap, 20)) out.append("   ").append(l).append('\n')
+        }
+        out.append("\nstep 6: ").append(if (goBack()) "went back" else "back key refused")
+            .append(". Nothing was pressed: this build has no code that taps a Mimic button.\n")
+        out.append("safety: execution gate = ").append(KillSwitch.verdict(app, cfg))
+        finish(out)
     }
 
     private fun readRows(): List<String> =
