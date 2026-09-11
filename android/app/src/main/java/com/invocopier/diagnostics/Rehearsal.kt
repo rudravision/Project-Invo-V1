@@ -110,6 +110,12 @@ object Rehearsal {
             }
         }
         out.append("step 2: feed readable, ").append(rows.size).append(" rows\n")
+        var rowIdx = 0
+        for (r in rows) {
+            rowIdx++
+            if (rowIdx > 8) break
+            out.append("         row ").append(rowIdx).append(": ").append(tiny(r)).append('\n')
+        }
 
         // ---- 3. newest row from a trader you approved ----
         var chosen: FeedSignal? = null
@@ -123,18 +129,20 @@ object Rehearsal {
             if (skipped.size < 3) skipped.add("not yours (" + tiny(r) + ")")
         }
         for (x in skipped) out.append("         skipped: ").append(x).append('\n')
-        val sig = chosen
-        if (sig == null) {
-            out.append("\nstep 3: NO ROW FROM YOUR APPROVED TRADERS (")
-            out.append(cfg.traders.keys.joinToString(", ").ifEmpty { "none configured" })
-            out.append(") in the feed right now.\n")
-            out.append("        That is not a fault - nothing will trade until a real signal exists.\n")
-            out.append("        Press 12 again after one of them posts, or press 11 and send me the capture.\n")
-            finish(out)
-            return
+        val approved = chosen != null
+        val sig: FeedSignal = chosen ?: FeedParser.parse(rows[0], cfg)
+        if (approved) {
+            out.append("step 3: chosen \"").append(tiny(sig.row)).append("\"  handle=").append(sig.handle)
+                .append(" action=").append(sig.action).append(" verdict=").append(sig.verdict).append('\n')
+        } else {
+            out.append("\nstep 3: your approved traders (")
+                .append(cfg.traders.keys.joinToString(", ").ifEmpty { "none configured" })
+                .append(") have nothing in this feed right now, so this run is MEASUREMENT ONLY.\n")
+            out.append("        Opening the newest row (")
+                .append(sig.handle.ifEmpty { "no handle found" })
+                .append(") purely to learn how a trade page is laid out.\n")
+            out.append("        That trader is NOT on your list, so nothing could ever trade from it.\n")
         }
-        out.append("step 3: chosen \"").append(tiny(sig.row)).append("\"  handle=").append(sig.handle)
-            .append(" action=").append(sig.action).append(" verdict=").append(sig.verdict).append('\n')
 
         // ---- 4. open it ----
         val key = if (sig.row.length > 55) sig.row.substring(0, 55) else sig.row
@@ -180,13 +188,17 @@ object Rehearsal {
         out.append("\n\nwhat the page actually says:\n")
         for (l in page.readable) out.append("   ").append(l).append('\n')
 
-        logJson(sig, page, snap.pkg, snap.nodeCount)
+        logJson(sig, page, snap.pkg, snap.nodeCount, approved)
 
         // ---- 6. leave the way we came ----
         out.append("\nstep 7: ").append(if (goBack()) "went back to the feed" else "back key refused, stay aware of where INVO is")
             .append('\n')
         out.append("safety: execution gate = ").append(KillSwitch.verdict(app, cfg))
             .append(", and this build has no swipe code at all.")
+        if (!approved) {
+            out.append("\nnote: MEASUREMENT ONLY - ").append(sig.handle.ifEmpty { "unknown trader" })
+                .append(" is not on your approved list, so this row can never become an order.")
+        }
         finish(out)
     }
 
@@ -221,9 +233,10 @@ object Rehearsal {
         }
     }
 
-    private fun logJson(sig: FeedSignal, page: TradePage, pkg: String, nodes: Int) {
+    private fun logJson(sig: FeedSignal, page: TradePage, pkg: String, nodes: Int, approved: Boolean) {
         val o = JSONObject()
         o.put("ev", "REHEARSAL_READ")
+        o.put("approvedTrader", approved)
         o.put("pkg", pkg)
         o.put("nodes", nodes)
         o.put("row", sig.row)
