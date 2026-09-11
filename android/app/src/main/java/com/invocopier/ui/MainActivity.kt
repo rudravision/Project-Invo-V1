@@ -122,6 +122,7 @@ class MainActivity : AppCompatActivity() {
         } catch (t: Throwable) {
             null
         }
+        sb.append("app build    : ").append(APP_BUILD).append('\n')
         sb.append("Android ").append(Build.VERSION.RELEASE).append(" (sdk ").append(Build.VERSION.SDK_INT).append(")\n")
         sb.append("INVO package   : ")
         sb.append(if (invo == null) "NOT FOUND -> fix invo_package in invo_config.json" else "installed, v" + (invo.versionName ?: "?")).append('\n')
@@ -231,5 +232,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val CHANNEL = "invo_copier_test"
+        /** Bump this with every published change so it is obvious on screen which build is installed. */
+        const val APP_BUILD = "P1.2"
     }
 }
