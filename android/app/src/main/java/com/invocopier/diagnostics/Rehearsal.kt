@@ -91,46 +91,65 @@ object Rehearsal {
             out.append("step 1: INVO already in front\n")
         }
 
-        // ---- 2. get to the feed ----
+        // ---- 2. get to the event feed ----
+        // Always tap the Notifications tab first: INVO opens on its trader
+        // leaderboard, where clickable @handles also appear (as trader cards, not
+        // events). Tapping an already-selected tab is a no-op, so this is safe.
+        val navOk = onMain<Boolean> {
+            InvoAccessibilityService.instance?.clickByTextOrDesc("Notifications Tab")
+        } ?: false
+        if (navOk) sleep(1800)
         var rows = readRows()
         if (rows.isEmpty()) {
-            out.append("step 2: no feed rows on screen - tapping the Notifications tab\n")
-            val tapped = onMain<Boolean> {
-                InvoAccessibilityService.instance?.clickByTextOrDesc("Notifications Tab")
-            } ?: false
+            out.append("step 2: nothing readable yet - re-opening INVO and trying the tab once more\n")
+            openInvo(app, cfg.invoPackage)
             sleep(2500)
-            rows = readRows()
-            if (rows.isEmpty()) {
-                out.append("         STILL EMPTY (tab tap ").append(if (tapped) "was accepted" else "failed")
-                    .append("). Open INVO's Notifications page yourself, then press 12 again.\n")
-                out.append("         What the screen does show right now:\n")
-                appendScreenPeek(out)
-                finish(out)
-                return
+            onMain<Boolean> {
+                InvoAccessibilityService.instance?.clickByTextOrDesc("Notifications Tab")
             }
+            sleep(1800)
+            rows = readRows()
         }
-        out.append("step 2: feed readable, ").append(rows.size).append(" rows\n")
+        if (rows.isEmpty()) {
+            out.append("step 2: REFUSED - INVO's screen gave back no readable rows at all.\n")
+            appendScreenPeek(out)
+            finish(out)
+            return
+        }
+        out.append("step 2: ").append(rows.size).append(" clickable rows on screen (tab tap ")
+            .append(if (navOk) "worked" else "not needed / not found").append(")\n")
+        appendPageHint(out)
         var rowIdx = 0
         for (r in rows) {
             rowIdx++
-            if (rowIdx > 8) break
-            out.append("         row ").append(rowIdx).append(": ").append(tiny(r)).append('\n')
+            if (rowIdx > 6) break
+            out.append("         row ").append(rowIdx).append(": ").append(tiny(r))
+                .append(if (isEventRow(r)) "" else "   <- not an event, will not be opened").append('\n')
+        }
+        val events = ArrayList<String>()
+        for (r in rows) if (isEventRow(r)) events.add(r)
+        if (events.isEmpty()) {
+            out.append("\nstep 3: REFUSED - none of these rows is a trade event, so we are not on the ")
+                .append("Notifications feed. Tap 11 to photograph the pages, or open INVO's Notifications ")
+                .append("page yourself and press 12 again.\n")
+            finish(out)
+            return
         }
 
-        // ---- 3. newest row from a trader you approved ----
+        // ---- 3. newest event from a trader you approved ----
         var chosen: FeedSignal? = null
         val skipped = ArrayList<String>()
-        for (r in rows) {
-            val s = FeedParser.parse(r, cfg)
-            if (s.whitelisted) {
-                chosen = s
+        for (r in events) {
+            val sig2 = FeedParser.parse(r, cfg)
+            if (sig2.whitelisted) {
+                chosen = sig2
                 break
             }
             if (skipped.size < 3) skipped.add("not yours (" + tiny(r) + ")")
         }
         for (x in skipped) out.append("         skipped: ").append(x).append('\n')
         val approved = chosen != null
-        val sig: FeedSignal = chosen ?: FeedParser.parse(rows[0], cfg)
+        val sig: FeedSignal = chosen ?: FeedParser.parse(events[0], cfg)
         if (approved) {
             out.append("step 3: chosen \"").append(tiny(sig.row)).append("\"  handle=").append(sig.handle)
                 .append(" action=").append(sig.action).append(" verdict=").append(sig.verdict).append('\n')
@@ -138,7 +157,7 @@ object Rehearsal {
             out.append("\nstep 3: your approved traders (")
                 .append(cfg.traders.keys.joinToString(", ").ifEmpty { "none configured" })
                 .append(") have nothing in this feed right now, so this run is MEASUREMENT ONLY.\n")
-            out.append("        Opening the newest row (")
+            out.append("        Opening the newest event (")
                 .append(sig.handle.ifEmpty { "no handle found" })
                 .append(") purely to learn how a trade page is laid out.\n")
             out.append("        That trader is NOT on your list, so nothing could ever trade from it.\n")
@@ -200,6 +219,21 @@ object Rehearsal {
                 .append(" is not on your approved list, so this row can never become an order.")
         }
         finish(out)
+    }
+
+    /** A real event row names an action, or uses the middle dot from the captured format. */
+    private fun isEventRow(row: String): Boolean {
+        if (row.contains('\u00B7')) return true
+        val low = row.lowercase()
+        return low.contains("opened") || low.contains("updated") ||
+            low.contains("closed") || low.contains("new trade") || low.contains("mimic")
+    }
+
+    private fun appendPageHint(out: StringBuilder) {
+        val snap = onMain<InvoAccessibilityService.ScreenSnapshot> {
+            InvoAccessibilityService.instance?.readScreen()
+        } ?: return
+        out.append("         page reads as: ").append(ScreenParser.pageHint(snap)).append('\n')
     }
 
     private fun readRows(): List<String> =
