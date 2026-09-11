@@ -51,6 +51,15 @@
                 android:resource="@xml/accessibility_config" />
         </service>
 
+        <!-- DEV ONLY: lets a PC request a delayed UI dump while INVO is on screen. -->
+        <receiver
+            android:name=".debug.UiDumpRequestReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.invocopier.DUMP" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>
