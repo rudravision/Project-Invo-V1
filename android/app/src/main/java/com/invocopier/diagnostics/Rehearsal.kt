@@ -155,11 +155,22 @@ object Rehearsal {
         // ---- 4. open it ----
         val key = if (sig.row.length > 55) sig.row.substring(0, 55) else sig.row
         val clicked = onMain<Boolean> {
-            InvoAccessibilityService.instance?.clickByDescContains(key)
+            InvoAccessibilityService.instance?.clickByDescSmart(key)
         } ?: false
         if (!clicked) {
-            out.append("step 4: COULD NOT OPEN - that row did not accept a tap. Tell me this line.\n")
-            finish(out)
+            out.append("step 4: that row would not take a tap - reading the trader's own page instead\n")
+            openInvo(app, cfg.invoPackage)
+            sleep(3500)
+            val listRows = readRows()
+            val cardRow = firstApprovedCard(listRows, cfg)
+            if (cardRow == null) {
+                out.append("        REFUSED - ").append(sig.handle)
+                    .append(" was not on INVO's opening page either (rows seen: ").append(listRows.size)
+                    .append("). Tell me this line.\n")
+                finish(out)
+                return
+            }
+            profilePath(app, cfg, cardRow, out)
             return
         }
         out.append("step 4: opened, reading the page\n")
@@ -296,7 +307,7 @@ object Rehearsal {
             .append(" is on your approved list - opening their trades instead.\n")
         val key = if (cardRow.length > 55) cardRow.substring(0, 55) else cardRow
         val tapped = onMain<Boolean> {
-            InvoAccessibilityService.instance?.clickByDescContains(key)
+            InvoAccessibilityService.instance?.clickByDescSmart(key)
         } ?: false
         if (!tapped) {
             out.append("step 4: REFUSED - that trader's card did not accept a tap.\n")

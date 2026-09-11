@@ -365,6 +365,106 @@ class InvoAccessibilityService : AccessibilityService() {
         return null
     }
 
+    /**
+     * Tap the thing a description points at, even when Flutter marks only an
+     * ancestor clickable. Tries the node itself, then the nearest clickable
+     * ancestor, then a single short gesture at its centre.
+     */
+    fun clickByDescSmart(needle: String): Boolean {
+        val root = try {
+            rootInActiveWindow
+        } catch (t: Throwable) {
+            null
+        } ?: return false
+        val node = findByDesc(root, needle, 0) ?: return false
+        val selfClickable = try {
+            node.isClickable
+        } catch (t: Throwable) {
+            false
+        }
+        if (selfClickable) {
+            val ok = try {
+                node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            } catch (t: Throwable) {
+                false
+            }
+            if (ok) return true
+        }
+        var parent: AccessibilityNodeInfo? = null
+        try {
+            parent = node.parent
+        } catch (t: Throwable) {
+            parent = null
+        }
+        var hops = 0
+        while (parent != null && hops < 5) {
+            val pClick = try {
+                parent.isClickable
+            } catch (t: Throwable) {
+                false
+            }
+            if (pClick) {
+                val ok = try {
+                    parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                } catch (t: Throwable) {
+                    false
+                }
+                if (ok) return true
+            }
+            parent = try {
+                parent.parent
+            } catch (t: Throwable) {
+                null
+            }
+            hops++
+        }
+        val rect = android.graphics.Rect()
+        val haveRect = try {
+            node.getBoundsInScreen(rect)
+            true
+        } catch (t: Throwable) {
+            false
+        }
+        if (!haveRect || rect.isEmpty) return false
+        return tapAt(rect.centerX(), rect.centerY())
+    }
+
+    private fun findByDesc(
+        node: AccessibilityNodeInfo?,
+        needle: String,
+        depth: Int
+    ): AccessibilityNodeInfo? {
+        if (node == null || depth > 30) return null
+        val d = try {
+            node.contentDescription?.toString() ?: ""
+        } catch (t: Throwable) {
+            ""
+        }
+        if (d.contains(needle, ignoreCase = true)) return node
+        val cc = node.childCount
+        var c = 0
+        while (c < cc) {
+            val found = findByDesc(node.getChild(c), needle, depth + 1)
+            if (found != null) return found
+            c++
+        }
+        return null
+    }
+
+    /**
+     * One short touch, fired and trusted: the caller checks what the screen did next
+     * rather than waiting for a gesture callback on this same thread.
+     */
+    private fun tapAt(x: Int, y: Int): Boolean = try {
+        val path = android.graphics.Path()
+        path.moveTo(x.toFloat(), y.toFloat())
+        val stroke = android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 90)
+        val gd = android.accessibilityservice.GestureDescription.Builder().addStroke(stroke).build()
+        dispatchGesture(gd, null, null)
+    } catch (t: Throwable) {
+        false
+    }
+
     /** System back key, used to leave a page we only opened to look at. */
     fun goBack(): Boolean = try {
         performGlobalAction(GLOBAL_ACTION_BACK)
