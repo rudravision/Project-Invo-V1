@@ -265,7 +265,7 @@ object Rehearsal {
     }
 
     /** Node reads must happen on the main thread; the worker waits for the result. */
-    private fun <T> onMain(block: () -> T): T? {
+    private fun <T> onMain(block: () -> T?): T? {
         if (InvoAccessibilityService.instance == null) return null
         val holder = arrayOfNulls<Any>(1)
         val latch = CountDownLatch(1)

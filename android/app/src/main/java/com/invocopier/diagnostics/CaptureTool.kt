@@ -137,7 +137,7 @@ object CaptureTool {
     }
 
     /** Accessibility nodes must be read on the main thread. */
-    private fun <T> onMain(block: () -> T): T? {
+    private fun <T> onMain(block: () -> T?): T? {
         if (InvoAccessibilityService.instance == null) return null
         val holder = arrayOfNulls<Any>(1)
         val latch = CountDownLatch(1)
