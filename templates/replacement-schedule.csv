@@ -1,0 +1,2 @@
+asset_id,asset_type,location,version_or_serial,last_verified_utc,next_review_utc,replacement_trigger,duplicate_location,owner_or_contact,notes
+EXAMPLE-DO-NOT-KEEP,SSD,record exact physical serial,CIVLIB,unknown,2026-12-18T00:00:00Z,SMART concern; I/O errors; failed verification; every 5 years minimum,record separate physical media,Replace with name,Delete this example row.

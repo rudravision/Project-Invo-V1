@@ -1,0 +1,2 @@
+verification_id,utc,operator,device_id_or_serial,volume_label,manifest_path,manifest_sha256,files_expected,files_ok,files_missing,files_changed,files_unexpected,result,smart_log_path,actions_or_incidents,next_due_utc
+EXAMPLE-DO-NOT-KEEP,2026-09-18T00:00:00Z,Replace with name,record physical serial,EXAMPLE,00_Admin/03_Manifests/library-sha256.tsv,replace-after-create,0,0,0,0,0,NOT_RUN,00_Admin/05_Logs/smart/example.txt,Delete this example row,2026-12-18T00:00:00Z

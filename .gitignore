@@ -1,0 +1,11 @@
+# Downloaded recovery-library content and machine-specific indexes should live on the SSD, not in this planning repository.
+acquired/
+CIVLIB/
+BOOTTOOLS/
+FAMILYVAULT/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.log
+__pycache__/
+.pytest_cache/

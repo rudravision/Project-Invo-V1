@@ -1,0 +1,2 @@
+asset_id,device_type,manufacturer_model,serial_or_service_tag,capacity_or_ram,interface,os_architecture,firmware_or_driver_version,location,last_tested_utc,notes
+EXAMPLE-DO-NOT-KEEP,Computer,Replace with actual model,record serial,Replace,USB-C / NVMe / RAM,x86_64 or arm64,record version,Replace,2026-09-18T00:00:00Z,Delete this example row.
