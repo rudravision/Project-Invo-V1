@@ -1,0 +1,179 @@
+{
+  "generated_at_utc": "2026-09-23T17:59:58+00:00",
+  "test_dates": {
+    "d1": "2026-09-22",
+    "d2": "2026-09-21"
+  },
+  "summary": {
+    "FAILED": 14,
+    "SKIPPED": 1
+  },
+  "results": [
+    {
+      "source": "nse:index_constituents_n50",
+      "url": "https://nsearchives.nseindia.com/content/indices/ind_nifty50list.csv",
+      "requires_credentials": false,
+      "status": "FAILED",
+      "http_status": null,
+      "latency_ms": 47,
+      "detail": "SSLError: HTTPSConnectionPool(host='nsearchives.nseindia.com', port=443): Max retries exceeded with url: /content/indices/ind_nifty50list.csv (Caused by SSLError(SSLZeroReturnError(6, 'TLS/SSL connection has be",
+      "bytes": 0,
+      "checked_at_utc": "2026-09-23T17:59:44+00:00"
+    },
+    {
+      "source": "nse:index_constituents_n200",
+      "url": "https://nsearchives.nseindia.com/content/indices/ind_nifty200list.csv",
+      "requires_credentials": false,
+      "status": "FAILED",
+      "http_status": null,
+      "latency_ms": 33,
+      "detail": "SSLError: HTTPSConnectionPool(host='nsearchives.nseindia.com', port=443): Max retries exceeded with url: /content/indices/ind_nifty200list.csv (Caused by SSLError(SSLZeroReturnError(6, 'TLS/SSL connection has b",
+      "bytes": 0,
+      "checked_at_utc": "2026-09-23T17:59:45+00:00"
+    },
+    {
+      "source": "nse:bhavcopy_udiff_cm",
+      "url": "https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_20260922_F_0000.csv.zip",
+      "requires_credentials": false,
+      "status": "FAILED",
+      "http_status": null,
+      "latency_ms": 33,
+      "detail": "SSLError: HTTPSConnectionPool(host='nsearchives.nseindia.com', port=443): Max retries exceeded with url: /content/cm/BhavCopy_NSE_CM_0_0_0_20260922_F_0000.csv.zip (Caused by SSLError(SSLZeroReturnError(6, 'TLS/",
+      "bytes": 0,
+      "checked_at_utc": "2026-09-23T17:59:46+00:00"
+    },
+    {
+      "source": "nse:bhavcopy_udiff_cm_d2",
+      "url": "https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_20260921_F_0000.csv.zip",
+      "requires_credentials": false,
+      "status": "FAILED",
+      "http_status": null,
+      "latency_ms": 33,
+      "detail": "SSLError: HTTPSConnectionPool(host='nsearchives.nseindia.com', port=443): Max retries exceeded with url: /content/cm/BhavCopy_NSE_CM_0_0_0_20260921_F_0000.csv.zip (Caused by SSLError(SSLZeroReturnError(6, 'TLS/",
+      "bytes": 0,
+      "checked_at_utc": "2026-09-23T17:59:47+00:00"
+    },
+    {
+      "source": "nse:bhavcopy_udiff_fo",
+      "url": "https://nsearchives.nseindia.com/content/fo/BhavCopy_NSE_FO_0_0_0_20260922_F_0000.csv.zip",
+      "requires_credentials": false,
+      "status": "FAILED",
+      "http_status": null,
+      "latency_ms": 34,
+      "detail": "SSLError: HTTPSConnectionPool(host='nsearchives.nseindia.com', port=443): Max retries exceeded with url: /content/fo/BhavCopy_NSE_FO_0_0_0_20260922_F_0000.csv.zip (Caused by SSLError(SSLZeroReturnError(6, 'TLS/",
+      "bytes": 0,
+      "checked_at_utc": "2026-09-23T17:59:48+00:00"
+    },
+    {
+      "source": "nse:index_close_all",
+      "url": "https://nsearchives.nseindia.com/content/indices/ind_close_all_22092026.csv",
+      "requires_credentials": false,
+      "status": "FAILED",
+      "http_status": null,
+      "latency_ms": 33,
+      "detail": "SSLError: HTTPSConnectionPool(host='nsearchives.nseindia.com', port=443): Max retries exceeded with url: /content/indices/ind_close_all_22092026.csv (Caused by SSLError(SSLZeroReturnError(6, 'TLS/SSL connection",
+      "bytes": 0,
+      "checked_at_utc": "2026-09-23T17:59:49+00:00"
+    },
+    {
+      "source": "nse:sec_delivery_full",
+      "url": "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_22092026.csv",
+      "requires_credentials": false,
+      "status": "FAILED",
+      "http_status": null,
+      "latency_ms": 32,
+      "detail": "SSLError: HTTPSConnectionPool(host='nsearchives.nseindia.com', port=443): Max retries exceeded with url: /products/content/sec_bhavdata_full_22092026.csv (Caused by SSLError(SSLZeroReturnError(6, 'TLS/SSL conne",
+      "bytes": 0,
+      "checked_at_utc": "2026-09-23T17:59:50+00:00"
+    },
+    {
+      "source": "nse:holiday_master",
+      "url": "https://www.nseindia.com/api/holiday-master?type=trading",
+      "requires_credentials": false,
+      "status": "FAILED",
+      "http_status": null,
+      "latency_ms": 34,
+      "detail": "SSLError: HTTPSConnectionPool(host='www.nseindia.com', port=443): Max retries exceeded with url: /api/holiday-master?type=trading (Caused by SSLError(SSLZeroReturnError(6, 'TLS/SSL connection has been closed (E",
+      "bytes": 0,
+      "checked_at_utc": "2026-09-23T17:59:51+00:00"
+    },
+    {
+      "source": "nse:corp_announcements",
+      "url": "https://www.nseindia.com/api/corporate-announcements?index=equities",
+      "requires_credentials": false,
+      "status": "FAILED",
+      "http_status": null,
+      "latency_ms": 53,
+      "detail": "SSLError: HTTPSConnectionPool(host='www.nseindia.com', port=443): Max retries exceeded with url: /api/corporate-announcements?index=equities (Caused by SSLError(SSLZeroReturnError(6, 'TLS/SSL connection has bee",
+      "bytes": 0,
+      "checked_at_utc": "2026-09-23T17:59:52+00:00"
+    },
+    {
+      "source": "nse:equity_quote_meta",
+      "url": "https://www.nseindia.com/api/quote-equity?symbol=RELIANCE",
+      "requires_credentials": false,
+      "status": "FAILED",
+      "http_status": null,
+      "latency_ms": 25,
+      "detail": "SSLError: HTTPSConnectionPool(host='www.nseindia.com', port=443): Max retries exceeded with url: /api/quote-equity?symbol=RELIANCE (Caused by SSLError(SSLZeroReturnError(6, 'TLS/SSL connection has been closed (",
+      "bytes": 0,
+      "checked_at_utc": "2026-09-23T17:59:53+00:00"
+    },
+    {
+      "source": "upstox:v3_historical_nifty",
+      "url": "https://api.upstox.com/v3/historical-candle/NSE_INDEX%7CNifty%2050/days/1/2026-09-22/2026-09-12",
+      "requires_credentials": false,
+      "status": "FAILED",
+      "http_status": null,
+      "latency_ms": 67,
+      "detail": "SSLError: HTTPSConnectionPool(host='api.upstox.com', port=443): Max retries exceeded with url: /v3/historical-candle/NSE_INDEX%7CNifty%2050/days/1/2026-09-22/2026-09-12 (Caused by SSLError(SSLZeroReturnError(6,",
+      "bytes": 0,
+      "checked_at_utc": "2026-09-23T17:59:54+00:00"
+    },
+    {
+      "source": "upstox:instruments_nse",
+      "url": "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz",
+      "requires_credentials": false,
+      "status": "FAILED",
+      "http_status": null,
+      "latency_ms": 58,
+      "detail": "SSLError: HTTPSConnectionPool(host='assets.upstox.com', port=443): Max retries exceeded with url: /market-quote/instruments/exchange/NSE.json.gz (Caused by SSLError(SSLZeroReturnError(6, 'TLS/SSL connection has",
+      "bytes": 0,
+      "checked_at_utc": "2026-09-23T17:59:55+00:00"
+    },
+    {
+      "source": "upstox:live_quote",
+      "url": "https://api.upstox.com/v2/market-quote/quotes?instrument_key=NSE_INDEX%7CNifty%2050",
+      "requires_credentials": true,
+      "status": "SKIPPED",
+      "http_status": null,
+      "latency_ms": null,
+      "detail": "Needs credentials. Set $UPSTOX_ACCESS_TOKEN to test. Not attempted -- no guessing.",
+      "bytes": 0,
+      "checked_at_utc": "2026-09-23T17:59:56+00:00"
+    },
+    {
+      "source": "yahoo:chart_nifty",
+      "url": "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=1mo&interval=1d",
+      "requires_credentials": false,
+      "status": "FAILED",
+      "http_status": null,
+      "latency_ms": 25,
+      "detail": "SSLError: HTTPSConnectionPool(host='query1.finance.yahoo.com', port=443): Max retries exceeded with url: /v8/finance/chart/%5ENSEI?range=1mo&interval=1d (Caused by SSLError(SSLZeroReturnError(6, 'TLS/SSL connec",
+      "bytes": 0,
+      "checked_at_utc": "2026-09-23T17:59:56+00:00"
+    },
+    {
+      "source": "yahoo:chart_reliance",
+      "url": "https://query1.finance.yahoo.com/v8/finance/chart/RELIANCE.NS?range=1mo&interval=1d",
+      "requires_credentials": false,
+      "status": "FAILED",
+      "http_status": null,
+      "latency_ms": 27,
+      "detail": "SSLError: HTTPSConnectionPool(host='query1.finance.yahoo.com', port=443): Max retries exceeded with url: /v8/finance/chart/RELIANCE.NS?range=1mo&interval=1d (Caused by SSLError(SSLZeroReturnError(6, 'TLS/SSL co",
+      "bytes": 0,
+      "checked_at_utc": "2026-09-23T17:59:57+00:00"
+    }
+  ],
+  "disclaimer": "Snapshot from one machine at one moment. Endpoints change. Re-run before relying on any source."
+}

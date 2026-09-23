@@ -1,0 +1,142 @@
+# Data source configuration.
+#
+# IMPORTANT: `enabled` reflects whether YOU have verified the source works on
+# YOUR machine. Run scripts/probe_sources.py first -- it writes a real, dated
+# report to reports/source_probe_*.json. Do not trust any claim in this file
+# that the probe has not confirmed.
+#
+# Nothing here bypasses authentication, CAPTCHAs, rate limits or paywalls.
+# Broker APIs require YOUR OWN account and YOUR OWN credentials.
+
+defaults:
+  timeout_seconds: 20
+  max_retries: 3
+  backoff_seconds: 2
+  # Politeness delay between requests to the same host. Do not lower this.
+  min_interval_seconds: 1.0
+  user_agent: "TRADING_AI/0.1 (personal research; contact: set-your-email)"
+
+# ---------------------------------------------------------------------------
+# Role assignment. The DataProvider router tries these in order.
+# ---------------------------------------------------------------------------
+roles:
+  daily_ohlc:
+    primary: nse_bhavcopy_udiff
+    backups: [upstox_v3, yahoo_chart]
+  index_ohlc:
+    primary: nse_index_archive
+    backups: [upstox_v3, yahoo_chart]
+  intraday:
+    primary: upstox_v3
+    backups: []
+  quotes:
+    primary: upstox_v3
+    backups: [yahoo_chart]
+  delivery:
+    primary: nse_sec_delivery
+    backups: []
+  derivatives:
+    primary: nse_fo_bhavcopy
+    backups: []
+  calendar:
+    primary: nse_holiday_api
+    backups: []
+  news:
+    primary: nse_corp_announcements
+    backups: [rss_generic]
+
+sources:
+
+  # ---- Official NSE downloadable archives (no login, published files) -----
+  nse_bhavcopy_udiff:
+    kind: file_archive
+    enabled: true
+    verify_required: true
+    base: "https://nsearchives.nseindia.com/content/cm"
+    pattern: "BhavCopy_NSE_CM_0_0_0_{yyyymmdd}_F_0000.csv.zip"
+    provides: [daily_ohlc, volume, isin, series]
+    notes: >
+      UDiFF replaced the legacy cm<DD><MON><YYYY>bhav.csv.zip format from
+      08-Jul-2024 (NSE circular 62424). Published after market close.
+      Requires a browser-like User-Agent and often a warm-up cookie from
+      www.nseindia.com. Terms of use apply -- personal research only.
+
+  nse_fo_bhavcopy:
+    kind: file_archive
+    enabled: true
+    verify_required: true
+    base: "https://nsearchives.nseindia.com/content/fo"
+    pattern: "BhavCopy_NSE_FO_0_0_0_{yyyymmdd}_F_0000.csv.zip"
+    provides: [futures, options, open_interest]
+
+  nse_sec_delivery:
+    kind: file_archive
+    enabled: true
+    verify_required: true
+    base: "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full"
+    pattern: "sec_bhavdata_full_{ddmmyyyy}.csv"
+    provides: [delivery_qty, delivery_pct]
+
+  nse_index_archive:
+    kind: file_archive
+    enabled: true
+    verify_required: true
+    base: "https://nsearchives.nseindia.com/content/indices"
+    pattern: "ind_close_all_{ddmmyyyy}.csv"
+    provides: [index_ohlc, sector_indices]
+
+  nse_index_constituents:
+    kind: file_archive
+    enabled: true
+    verify_required: true
+    base: "https://nsearchives.nseindia.com/content/indices"
+    pattern: "ind_{index_slug}list.csv"
+    provides: [index_membership, sector_labels]
+
+  nse_holiday_api:
+    kind: json_api
+    enabled: true
+    verify_required: true
+    url: "https://www.nseindia.com/api/holiday-master?type=trading"
+    provides: [calendar]
+
+  nse_corp_announcements:
+    kind: json_api
+    enabled: true
+    verify_required: true
+    url: "https://www.nseindia.com/api/corporate-announcements?index=equities"
+    provides: [announcements, corporate_actions]
+
+  # ---- Broker APIs: free, but require YOUR OWN account + credentials ------
+  upstox_v3:
+    kind: broker_api
+    enabled: false          # flip on after you add credentials AND probe it
+    requires_credentials: true
+    base: "https://api.upstox.com/v3"
+    historical_path: "/historical-candle/{instrument_key}/{unit}/{interval}/{to}/{from}"
+    intraday_path: "/historical-candle/intraday/{instrument_key}/{unit}/{interval}"
+    provides: [daily_ohlc, intraday, quotes, index_ohlc, india_vix]
+    notes: >
+      v3 historical endpoints have been reachable without a bearer token in the
+      past, but this is NOT contractual and must be re-probed. Live quotes and
+      the market-data websocket DO require an Upstox account and access token.
+      Access tokens expire daily per SEBI rules.
+
+  # ---- Generic public quote endpoint --------------------------------------
+  yahoo_chart:
+    kind: json_api
+    enabled: false          # verify terms + reachability before enabling
+    base: "https://query1.finance.yahoo.com/v8/finance/chart"
+    symbol_suffix: ".NS"
+    provides: [daily_ohlc, intraday, index_ohlc]
+    notes: >
+      Convenient and widely used, but it is an undocumented endpoint, not a
+      licensed API, and Yahoo's terms restrict redistribution. Treat as a
+      CROSS-CHECK and last-resort backup, never as the system of record.
+      Known to have adjusted-price and India-symbol quirks.
+
+  rss_generic:
+    kind: rss
+    enabled: false
+    feeds: []
+    provides: [news]

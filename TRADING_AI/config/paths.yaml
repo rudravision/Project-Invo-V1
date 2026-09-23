@@ -1,0 +1,20 @@
+# Where the project lives.
+#
+# Leave project_root EMPTY to auto-detect the external SSD at startup.
+# The system will NEVER assume a drive letter such as E:.
+#
+# Override order: this file -> TRADING_AI_ROOT env var -> auto-detection.
+project_root: ""
+
+# Case-insensitive substrings used to recognise your SSD by volume label or
+# device model. Add your drive's label here once you know it (run SYSTEM_CHECK).
+ssd_name_hints:
+  - sandisk
+  - extreme
+  - trading_ai
+
+# Refuse to start if free space on the SSD drops below this.
+min_free_gb: 20
+
+# Refuse to write new bulk downloads below this (softer guard).
+warn_free_gb: 50

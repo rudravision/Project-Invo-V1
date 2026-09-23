@@ -1,0 +1,13 @@
+TRADING_AI/.venv/
+TRADING_AI/config/.env
+TRADING_AI/data/
+TRADING_AI/database/
+TRADING_AI/backups/
+TRADING_AI/logs/
+TRADING_AI/backtests/
+TRADING_AI/paper_trading/
+TRADING_AI/models/*/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/

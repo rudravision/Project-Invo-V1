@@ -1,0 +1,25 @@
+# ---- secrets: NEVER commit -------------------------------------------------
+config/.env
+*.key
+*.pem
+credentials.json
+
+# ---- runtime data lives on the SSD, not in Git -----------------------------
+# Leading slash = anchored to TRADING_AI/, so app/data/ is NOT matched.
+/data/
+/database/
+/backups/
+/logs/
+/backtests/
+/paper_trading/
+/models/production/
+/models/experimental/
+/models/archived/
+
+# ---- python ----------------------------------------------------------------
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.cache/
+*.egg-info/
