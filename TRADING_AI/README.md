@@ -1,5 +1,11 @@
 # TRADING_AI
 
+> **New to this? Not technical?**
+> Read **[START_HERE.md](START_HERE.md)** instead of this file, and
+> double-click **`CLICK_ME_FIRST.bat`**. That is all you need.
+>
+> This README is the technical reference.
+
 A portable, low-cost NSE trading **research and alert** system designed to run
 entirely from an external SSD, on free and public data, at **₹0/month**.
 
