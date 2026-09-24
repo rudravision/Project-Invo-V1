@@ -386,3 +386,52 @@ def test_sources_page_without_probe(client):
 def test_unknown_action_rejected(client):
     c, _ = client
     assert c.post("/api/run/nonsense").status_code == 400
+
+
+# ------------------------------------------- data sources page regressions --
+def test_source_summary_maps_probe_status_names(client, tmp_path):
+    """The page showed '—' for every counter.
+
+    probe_sources.py writes WORKING / FAILED / BLOCKED / RATE_LIMITED /
+    SKIPPED / NOT_PUBLISHED, but the API was reading ok / fail / blocked,
+    so nothing ever matched.
+    """
+    c, app = client
+    reports = app.config["SETTINGS"].reports_dir
+    reports.mkdir(parents=True, exist_ok=True)
+    (reports / "source_probe_20260101_000000.json").write_text(json.dumps({
+        "generated_at_utc": dt.datetime.now(dt.timezone.utc)
+        .isoformat(timespec="seconds"),
+        "summary": {"WORKING": 9, "FAILED": 3, "BLOCKED": 1,
+                    "RATE_LIMITED": 1, "SKIPPED": 2},
+        "results": [{"source": "nse:bhavcopy_udiff_cm", "status": "WORKING",
+                     "latency_ms": 120, "http_status": 200}],
+    }))
+    d = j(c.get("/api/sources"))
+    assert d["summary"]["ok"] == 9
+    assert d["summary"]["fail"] == 3
+    assert d["summary"]["blocked"] == 2      # BLOCKED + RATE_LIMITED
+    assert d["summary"]["skipped"] == 2
+    assert d["stale"] is False
+    assert len(d["sources"]) == 1
+
+
+def test_old_source_probe_is_marked_stale(client):
+    """A day-old FAILED verdict must not look like today's truth."""
+    c, app = client
+    reports = app.config["SETTINGS"].reports_dir
+    reports.mkdir(parents=True, exist_ok=True)
+    old = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=30)
+    (reports / "source_probe_20250101_000000.json").write_text(json.dumps({
+        "generated_at_utc": old.isoformat(timespec="seconds"),
+        "summary": {"FAILED": 14}, "results": [],
+    }))
+    d = j(c.get("/api/sources"))
+    assert d["stale"] is True
+    assert 29 < d["age_hours"] < 31
+
+
+def test_request_log_is_quietened(client):
+    import logging as _l
+    assert _l.getLogger("werkzeug").level >= _l.WARNING, \
+        "polling /api/job every second must not flood the log file"

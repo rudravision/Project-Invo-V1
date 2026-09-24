@@ -492,11 +492,26 @@
   function loadSources() {
     api("/api/sources").then(function (d) {
       var sm = d.summary || {};
+      var when = d.generated_at ? d.generated_at.slice(0, 19).replace("T", " ")
+        : "Never";
+      if (d.age_hours !== null && d.age_hours !== undefined) {
+        when += d.age_hours < 1 ? " (just now)"
+          : d.age_hours < 48 ? " (" + Math.round(d.age_hours) + "h ago)"
+            : " (" + Math.round(d.age_hours / 24) + " days ago)";
+      }
       $("#srcSummary").innerHTML =
-        item("Last tested", d.generated_at ? d.generated_at.slice(0, 19) : "Never") +
+        item("Last tested", when) +
         item("Working", sm.ok !== undefined ? sm.ok : "—") +
         item("Failing", sm.fail !== undefined ? sm.fail : "—") +
         item("Blocked / refused", sm.blocked !== undefined ? sm.blocked : "—");
+
+      $("#srcStale").innerHTML = d.stale
+        ? "<div class='banner warn'><h4>These results are out of date</h4>" +
+        "<p>This test last ran " + when + ". A source shown as FAILED here " +
+        "may be working now — and if your downloads are running, it is. " +
+        "Click TEST ALL SOURCES for the current picture.</p></div>"
+        : "";
+
       if (!d.sources.length) {
         $("#srcTable").innerHTML = "<div class='empty'>No source test has been " +
           "run yet. Click TEST ALL SOURCES.</div>";

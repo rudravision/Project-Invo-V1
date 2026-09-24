@@ -80,8 +80,20 @@ def _clean(o):
     return o
 
 
+def _quieten_request_log() -> None:
+    """Stop the web server logging every single request.
+
+    The interface polls /api/job roughly once a second while a job runs, so
+    at INFO level werkzeug wrote a line per poll and buried every genuine
+    message under thousands of '"GET /api/job HTTP/1.1" 200' lines. Real
+    warnings and errors still come through at WARNING and above.
+    """
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)
+
+
 def create_app(root: str | None = None) -> Flask:
     settings = load_settings(root)
+    _quieten_request_log()
     db = Database(settings.db_path)
     migrate(db, settings.backups_dir)
 
@@ -574,6 +586,19 @@ def create_app(root: str | None = None) -> Flask:
         finally:
             conn.close()
 
+        # The probe reports WORKING / FAILED / BLOCKED / NOT_PUBLISHED /
+        # RATE_LIMITED / SKIPPED / UNKNOWN. Roll those into the four counters
+        # the page shows.
+        raw = latest.get("summary", {}) or {}
+        summary = {
+            "ok": raw.get("WORKING", 0),
+            "fail": (raw.get("FAILED", 0) + raw.get("UNKNOWN", 0)
+                     + raw.get("REACHABLE_BUT_UNEXPECTED", 0)),
+            "blocked": (raw.get("BLOCKED", 0) + raw.get("RATE_LIMITED", 0)),
+            "skipped": (raw.get("SKIPPED", 0) + raw.get("NOT_PUBLISHED", 0)),
+            "raw": raw,
+        }
+
         rows = []
         for r in latest.get("results", []):
             rows.append({
@@ -585,8 +610,26 @@ def create_app(root: str | None = None) -> Flask:
                 or _guess_purpose(r["source"]),
                 "fallback": fallback.get(r["source"].split(":")[0], "-"),
             })
-        return jsonify({"generated_at": latest.get("generated_at_utc"),
-                        "summary": latest.get("summary", {}),
+        # Tell the user how old this snapshot is. A source test from
+        # yesterday can say FAILED while today's download is working fine,
+        # which is confusing unless the staleness is stated plainly.
+        age_hours = None
+        gen = latest.get("generated_at_utc")
+        if gen:
+            try:
+                then = dt.datetime.fromisoformat(gen.replace("Z", "+00:00"))
+                if then.tzinfo is None:
+                    then = then.replace(tzinfo=dt.timezone.utc)
+                age_hours = round(
+                    (dt.datetime.now(dt.timezone.utc) - then).total_seconds()
+                    / 3600, 1)
+            except ValueError:
+                pass
+
+        return jsonify({"generated_at": gen,
+                        "age_hours": age_hours,
+                        "stale": bool(age_hours is not None and age_hours > 12),
+                        "summary": summary,
                         "sources": rows, "failures": fails})
 
     def _guess_purpose(name):

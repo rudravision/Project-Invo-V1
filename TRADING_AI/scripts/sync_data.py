@@ -56,8 +56,8 @@ CORE_INDICES = [
 MEMBERSHIP_SLUGS = [
     "nifty50", "nifty100", "nifty200", "nifty500",
     "niftybank", "niftyit", "niftyauto", "niftyfmcg", "niftypharma",
-    "niftymetal", "niftyrealty", "niftyenergy", "niftyfinancialservices",
-    "niftypsubank", "niftyprivatebank", "niftymedia", "niftyhealthcare",
+    "niftymetal", "niftyrealty", "niftyenergy", "niftyfinance",
+    "niftypsubank", "nifty_privatebank", "niftymedia", "niftyhealthcare",
     "niftyconsumerdurables", "niftyoilgas", "niftyinfra",
 ]
 
@@ -66,8 +66,8 @@ SECTOR_FROM_SLUG = {
     "niftyauto": "Automobile", "niftyfmcg": "FMCG",
     "niftypharma": "Pharmaceuticals", "niftymetal": "Metals & Mining",
     "niftyrealty": "Realty", "niftyenergy": "Energy",
-    "niftyfinancialservices": "Financial Services",
-    "niftypsubank": "PSU Banks", "niftyprivatebank": "Private Banks",
+    "niftyfinance": "Financial Services",
+    "niftypsubank": "PSU Banks", "nifty_privatebank": "Private Banks",
     "niftymedia": "Media", "niftyhealthcare": "Healthcare",
     "niftyconsumerdurables": "Consumer Durables",
     "niftyoilgas": "Oil & Gas", "niftyinfra": "Infrastructure",

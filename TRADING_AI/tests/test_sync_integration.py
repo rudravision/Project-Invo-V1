@@ -259,3 +259,31 @@ def test_validator_passes_after_repair(env, monkeypatch):
 
     rep = validate_daily_v2(df, db)
     assert rep.ok, rep.summary()
+
+
+def test_membership_slugs_match_nse_filenames():
+    """Two slugs produced 404s on the user's machine.
+
+    NSE publishes Financial Services as ind_niftyfinancelist.csv and Private
+    Bank as ind_nifty_privatebanklist.csv (note the underscore). The
+    provider builds the URL as ind_{slug}list.csv, so the slug has to match
+    the published filename exactly.
+    """
+    import scripts.sync_data as sd
+    assert "niftyfinance" in sd.MEMBERSHIP_SLUGS
+    assert "nifty_privatebank" in sd.MEMBERSHIP_SLUGS
+    assert "niftyfinancialservices" not in sd.MEMBERSHIP_SLUGS
+    assert "niftyprivatebank" not in sd.MEMBERSHIP_SLUGS
+    # every slug that maps to a sector must also be fetched
+    for slug in sd.SECTOR_FROM_SLUG:
+        assert slug in sd.MEMBERSHIP_SLUGS, f"{slug} maps a sector but is never fetched"
+
+
+def test_membership_urls_are_well_formed():
+    """Guards the ind_{slug}list.csv contract the slugs depend on."""
+    import scripts.sync_data as sd
+    from app.data.providers.nse_archive import ARCHIVES
+    for slug in sd.MEMBERSHIP_SLUGS:
+        url = f"{ARCHIVES}/content/indices/ind_{slug}list.csv"
+        assert url.endswith("list.csv")
+        assert " " not in url
