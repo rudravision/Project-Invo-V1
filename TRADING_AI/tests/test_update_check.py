@@ -15,7 +15,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app.update import (UNREACHABLE, UP_TO_DATE, UPDATE_READY, check,
+from app.update import (UNREACHABLE, UP_TO_DATE, UPDATE_READY, api_version_url, check,
                         is_newer, local_version, parse_version,
                         raw_version_url)
 
@@ -133,3 +133,37 @@ def test_endpoint_returns_a_usable_payload(tmp_path):
     assert d["state"] in (UNREACHABLE, UP_TO_DATE, UPDATE_READY)
     assert d["installed"]
     assert d["message"]
+
+
+# ------------------------------------------------- blocked-network route --
+def test_api_url_is_a_credential_free_fallback():
+    u = api_version_url()
+    assert u.startswith("https://api.github.com/repos/")
+    assert "TRADING_AI/VERSION" in u
+    assert "ref=" in u
+
+
+def test_falls_back_to_the_api_when_raw_is_blocked(tmp_path):
+    """Several Indian ISPs block raw.githubusercontent.com."""
+    seen = []
+
+    def fetch(url, **kw):
+        seen.append(url)
+        if "raw.githubusercontent.com" in url:
+            raise OSError("SSL connect error")
+        return FakeResponse(200, "2026.09.24.99")
+
+    out = check(root_with(tmp_path, "2026.09.24.12"), fetch=fetch)
+    assert out["state"] == UPDATE_READY
+    assert out["latest"] == "2026.09.24.99"
+    assert any("raw.githubusercontent" in u for u in seen)
+    assert any("api.github.com" in u for u in seen)
+
+
+def test_both_routes_down_reports_offline_once(tmp_path):
+    def fetch(url, **kw):
+        raise OSError("no route to host")
+
+    out = check(root_with(tmp_path), fetch=fetch)
+    assert out["state"] == UNREACHABLE
+    assert out["reason"] == "no_internet"

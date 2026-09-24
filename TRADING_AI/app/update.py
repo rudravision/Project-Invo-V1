@@ -46,6 +46,18 @@ def raw_version_url(repo: str = DEFAULT_REPO,
             f"/TRADING_AI/VERSION")
 
 
+def api_version_url(repo: str = DEFAULT_REPO,
+                    branch: str = DEFAULT_BRANCH) -> str:
+    """Fallback route.
+
+    Some corporate and ISP filters block raw.githubusercontent.com while
+    allowing api.github.com. Both serve the same file for a public repo,
+    and neither needs a credential.
+    """
+    return (f"https://api.github.com/repos/{repo}/contents/TRADING_AI/VERSION"
+            f"?ref={branch}")
+
+
 def local_version(root: str | Path) -> str:
     p = Path(root) / "VERSION"
     try:
@@ -79,12 +91,15 @@ def is_newer(remote: str, local: str) -> bool:
 def _default_fetch(url: str, timeout: float = 8.0):
     import requests
 
-    return requests.get(url, timeout=timeout,
-                        headers={"User-Agent": "TRADING_AI-update-check"})
+    headers = {"User-Agent": "TRADING_AI-update-check"}
+    if "api.github.com" in url:
+        # ask the API for the file itself rather than its JSON wrapper
+        headers["Accept"] = "application/vnd.github.raw"
+    return requests.get(url, timeout=timeout, headers=headers)
 
 
 def check(root: str | Path, url: str | None = None,
-          fetch: Callable | None = None) -> dict:
+          fetch: Callable | None = None, _fallback: bool = True) -> dict:
     """Compare the installed version against the published one."""
     installed = local_version(root)
     url = url or raw_version_url()
@@ -95,6 +110,12 @@ def check(root: str | Path, url: str | None = None,
         status = getattr(r, "status_code", 0)
         body = getattr(r, "text", "") or ""
     except Exception as e:  # noqa: BLE001 - offline, DNS, TLS, anything
+        # Some networks block raw.githubusercontent.com but allow the API.
+        # Try the other door before declaring the user offline.
+        if _fallback and "raw.githubusercontent.com" in url:
+            alt = check(root, api_version_url(), fetch, _fallback=False)
+            if alt["state"] != UNREACHABLE or alt.get("reason") != "no_internet":
+                return alt
         return {
             "state": UNREACHABLE, "installed": installed, "latest": None,
             "reason": "no_internet",

@@ -40,6 +40,34 @@ Open it. Inside is a folder called **`TRADING_AI`**. Open that one too.
 You should now be looking at files like `TRADING_AI.bat`, `INSTALL.bat`,
 `app`, `scripts`, `docs`.
 
+### Step 4a. If Chrome blocks the download as "dangerous"
+
+Chrome refuses ZIP files that contain `.bat` scripts, regardless of what
+is in them. Ours contains eight (`INSTALL.bat`, `TRADING_AI.bat` and so
+on), so the warning is about the *shape* of the file, not its contents.
+
+**You do not have to argue with Chrome.** Skip the browser entirely:
+
+1. Press **Start**, type `powershell`, and open **Windows PowerShell**.
+2. Paste this in, one line, and press Enter
+   (change `G:\Trading\TRADING_AI` if yours is elsewhere):
+
+```powershell
+cd $env:TEMP; Invoke-WebRequest -UseBasicParsing -Uri "https://codeload.github.com/rudravision/Project-Invo-V1/zip/refs/heads/arena/01a0cf67-project-invo-v1" -OutFile ta.zip; Expand-Archive ta.zip -DestinationPath ta -Force; powershell -ExecutionPolicy Bypass -File "ta\Project-Invo-V1-arena-01a0cf67-project-invo-v1\TRADING_AI\UPDATE_FROM_GITHUB.ps1" -Dest "G:\Trading\TRADING_AI"
+```
+
+It downloads the same files, backs up your current program folder, copies
+the new version in, and prints the old and new version numbers.
+
+Your database, backups, reports, logs and Telegram settings are excluded
+from the copy, and it never deletes anything.
+
+**Once you are on version 2026.09.24.12 or later**, updating gets easier:
+you will have `UPDATE_FROM_GITHUB.ps1` in your own folder, so you can just
+right-click it and choose **Run with PowerShell**.
+
+---
+
 ### Step 4. Update your copy — the easy way
 
 **Where the file is:** after unzipping you have a folder called
