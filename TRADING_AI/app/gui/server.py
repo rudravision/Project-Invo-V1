@@ -44,7 +44,7 @@ from app.db.migrations import migrate
 from app.gui import jobs as jobslib
 from app.gui.pipeline import (build_calibration_job, full_update_job,
                               repair_job, run_backtest_job,
-                              run_robustness_job)
+                              run_robustness_job, run_strategies_job)
 
 log = logging.getLogger(__name__)
 
@@ -613,6 +613,34 @@ def create_app(root: str | None = None) -> Flask:
         }))
 
     # -------------------------------------------------------------- charts
+    @app.get("/api/strategies")
+    def api_strategies():
+        """The six-strategy engine: what each one says today."""
+        from app.strategies import available
+
+        raw = get_setting("last_strategy_run")
+        known = available()
+        flags = {n: bool(get_setting(f"strategy_{n}_enabled", True))
+                 for n in known}
+        if not raw:
+            return jsonify({
+                "available": False, "known": known, "enabled": flags,
+                "message": ("No strategy run yet. Press RUN STRATEGIES.")})
+        data = raw if isinstance(raw, dict) else json.loads(raw)
+        data.update({"available": True, "known": known, "enabled": flags})
+        return jsonify(_clean(data))
+
+    @app.post("/api/strategies/<name>/enabled")
+    def api_strategy_toggle(name):
+        """Turn one strategy on or off without touching the others."""
+        from app.strategies import available
+
+        if name not in available():
+            return jsonify({"error": f"Unknown strategy '{name}'"}), 404
+        want = bool((request.get_json(silent=True) or {}).get("enabled", True))
+        save_settings({f"strategy_{name}_enabled": want})
+        return jsonify({"strategy": name, "enabled": want})
+
     @app.get("/api/robustness")
     def api_robustness():
         """The last out-of-sample settings test."""
@@ -812,6 +840,10 @@ def create_app(root: str | None = None) -> Flask:
                 job = manager.start(
                     "Backtest",
                     lambda j: run_backtest_job(j, db, settings, body))
+            elif action == "strategies":
+                job = manager.start(
+                    "Run Strategies",
+                    lambda j: run_strategies_job(j, db, settings, body))
             elif action == "robustness":
                 job = manager.start(
                     "Robustness Test",

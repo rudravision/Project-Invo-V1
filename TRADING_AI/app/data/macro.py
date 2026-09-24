@@ -336,6 +336,7 @@ def rolling_net(db, window: int = 20) -> dict:
                 "units": UNITS}
     return {"available": True, "window": window,
             "as_of": recent[-1]["date"],
+            "rows": recent,
             "fii_net": round(sum(fii), 2), "dii_net": round(sum(dii), 2),
             "fii_net_latest": recent[-1]["fii_net"],
             "dii_net_latest": recent[-1]["dii_net"],

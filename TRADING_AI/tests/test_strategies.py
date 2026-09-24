@@ -285,3 +285,294 @@ def test_result_serialises_for_the_api():
     assert isinstance(d["signals"], list) and d["signals"]
     assert {"symbol", "action", "entry_price", "stop_loss"} <= set(
         d["signals"][0])
+
+
+# =========================================================================
+# Strategy 5: RSI Mean Reversion
+# =========================================================================
+from app.strategies.fii_flow import (FIIFlowParams, FIIFlowStrategy,
+                                     dii_buying_streak)
+from app.strategies.mean_reversion import (MeanReversionParams,
+                                           MeanReversionStrategy,
+                                           measure_condition)
+
+
+def index_frame(closes, name="Nifty 50", end=dt.date(2026, 9, 18)):
+    days, d = [], end
+    while len(days) < len(closes):
+        if d.weekday() < 5:
+            days.append(d)
+        d -= dt.timedelta(days=1)
+    days = sorted(days)
+    return pd.DataFrame([{"index_name": name, "date": x.isoformat(),
+                          "close": c} for x, c in zip(days, closes)])
+
+
+def falling_index(n=400, start=25000.0, rate=-0.0035):
+    """A steady decline drives RSI to an extreme."""
+    out, p = [], start
+    for _ in range(n):
+        p *= (1 + rate)
+        out.append(p)
+    return out
+
+
+def test_mean_reversion_stays_quiet_in_normal_conditions():
+    flat = [20000 + (i % 7) * 10 for i in range(400)]
+    res = MeanReversionStrategy().generate(
+        MarketContext(as_of=dt.date(2026, 9, 18), daily=pd.DataFrame(),
+                      index_daily=index_frame(flat)))
+    assert res.ok is False
+    assert "No extreme reading" in res.skipped_reason
+    assert "only a few times a year" in res.skipped_reason
+
+
+def test_mean_reversion_fires_when_oversold():
+    idx = index_frame(falling_index())
+    res = MeanReversionStrategy().generate(
+        MarketContext(as_of=dt.date(2026, 9, 18), daily=pd.DataFrame(),
+                      index_daily=idx, india_vix=25.0,
+                      valuation={"pe": 18.0}))
+    assert res.ok is True
+    s = res.signals[0]
+    assert s.action == BUY and s.symbol == "NIFTY 50"
+    assert s.metrics["signal_label"] in ("BUY", "STRONG_BUY")
+    assert s.stop_loss == round(s.entry_price * 0.97, 2)
+    assert s.metrics["rsi_14"] < 30
+
+
+def test_mean_reversion_reports_missing_inputs():
+    idx = index_frame(falling_index())
+    res = MeanReversionStrategy().generate(
+        MarketContext(as_of=dt.date(2026, 9, 18), daily=pd.DataFrame(),
+                      index_daily=idx))            # no VIX, no PE
+    joined = " ".join(res.filters_skipped)
+    assert "India VIX" in joined and "P/E" in joined
+
+
+def test_mean_reversion_without_index_data_explains_itself():
+    res = MeanReversionStrategy().generate(
+        MarketContext(as_of=dt.date(2026, 9, 18), daily=pd.DataFrame()))
+    assert res.ok is False
+    assert "UPDATE & ANALYZE MARKET" in res.skipped_reason
+
+
+def test_mean_reversion_never_invents_a_confidence():
+    idx = index_frame(falling_index())
+    res = MeanReversionStrategy().generate(
+        MarketContext(as_of=dt.date(2026, 9, 18), daily=pd.DataFrame(),
+                      index_daily=idx, india_vix=25.0,
+                      valuation={"pe": 18.0}))
+    assert res.signals[0].confidence is None
+
+
+def test_measured_hit_rate_refuses_a_small_sample():
+    close = pd.Series(np.linspace(100, 120, 60))
+    mask = pd.Series([False] * 55 + [True] * 5)
+    out = measure_condition(close, mask, forward_days=10)
+    assert out["available"] is False
+    assert "only occurred" in out["note"]
+    assert "hit_rate_pct" not in out
+
+
+def test_measured_hit_rate_counts_real_outcomes():
+    """A rising series must measure a high hit rate, not a guessed one."""
+    close = pd.Series(np.linspace(100, 300, 400))
+    mask = pd.Series([True] * 400)
+    out = measure_condition(close, mask, forward_days=10)
+    assert out["available"] is True
+    assert out["hit_rate_pct"] == 100.0
+    assert out["observations"] == 390       # last 10 have no outcome yet
+    assert "not a forecast" in out["note"]
+
+
+# =========================================================================
+# Strategy 3: FII Flow Reversal
+# =========================================================================
+def flows(fii, dii, rows=None, available=True, window=20):
+    return {"available": available, "window": window, "fii_net": fii,
+            "dii_net": dii, "as_of": "2026-09-18", "units": "INR crore",
+            "rows": rows or [{"dii_net": 500.0} for _ in range(window)]}
+
+
+def test_fii_strategy_needs_data_before_it_speaks():
+    res = FIIFlowStrategy().generate(
+        MarketContext(as_of=dt.date(2026, 9, 18), daily=pd.DataFrame()))
+    assert res.ok is False
+    assert "nseindia.com" in res.skipped_reason
+
+
+def test_fii_strategy_respects_the_short_window_refusal():
+    """A 6-day sum must never be judged against a 20-day threshold."""
+    res = FIIFlowStrategy().generate(MarketContext(
+        as_of=dt.date(2026, 9, 18), daily=pd.DataFrame(),
+        flows={"available": False, "observations": 6,
+               "reason": "Only 6 day(s) of FII/DII data stored; 20 needed."}))
+    assert res.ok is False
+    assert "20 needed" in res.skipped_reason
+
+
+def test_accumulation_phase():
+    idx = index_frame(falling_index())
+    res = FIIFlowStrategy().generate(MarketContext(
+        as_of=dt.date(2026, 9, 18), daily=pd.DataFrame(), index_daily=idx,
+        flows=flows(-18_500.0, 14_200.0), india_vix=19.5))
+    assert res.ok is True
+    s = res.signals[0]
+    assert s.metrics["phase"] == "ACCUMULATION"
+    assert s.action == BUY and s.allocation_pct == 33.0
+    assert "three tranches" in s.reasoning
+
+
+def test_aggressive_phase_needs_the_dii_streak_and_vix():
+    idx = index_frame(falling_index())
+    base = dict(as_of=dt.date(2026, 9, 18), daily=pd.DataFrame(),
+                index_daily=idx)
+
+    hit = FIIFlowStrategy().generate(MarketContext(
+        **base, flows=flows(-30_000.0, 20_000.0), india_vix=21.0))
+    assert hit.signals[0].metrics["phase"] == "AGGRESSIVE_BUY"
+    assert hit.signals[0].allocation_pct == 80.0
+
+    # same flows but calm VIX -> must fall back, not claim the extreme
+    calm = FIIFlowStrategy().generate(MarketContext(
+        **base, flows=flows(-30_000.0, 20_000.0), india_vix=12.0))
+    assert calm.signals == [] or \
+        calm.signals[0].metrics["phase"] != "AGGRESSIVE_BUY"
+
+
+def test_exit_phase_on_euphoria():
+    rising = index_frame([20000 * (1.004 ** i) for i in range(400)])
+    res = FIIFlowStrategy().generate(MarketContext(
+        as_of=dt.date(2026, 9, 18), daily=pd.DataFrame(), index_daily=rising,
+        flows=flows(30_000.0, -5_000.0), valuation={"pe": 26.0}))
+    s = res.signals[0]
+    assert s.metrics["phase"] == "EXIT"
+    assert s.action == SELL and s.allocation_pct == 100.0
+
+
+def test_neutral_flows_produce_nothing():
+    idx = index_frame(falling_index())
+    res = FIIFlowStrategy().generate(MarketContext(
+        as_of=dt.date(2026, 9, 18), daily=pd.DataFrame(), index_daily=idx,
+        flows=flows(-2_000.0, 1_000.0), india_vix=14.0))
+    assert res.ok is False
+    assert "two to four times a year" in res.skipped_reason
+
+
+@pytest.mark.parametrize("nets,expect", [
+    ([100, 200, 300], 3),
+    ([-50, 200, 300], 2),
+    ([100, 200, -1], 0),
+    ([100, None, 300], 1),
+    ([], 0),
+])
+def test_dii_streak_counting(nets, expect):
+    assert dii_buying_streak([{"dii_net": v} for v in nets]) == expect
+
+
+def test_fii_thresholds_are_configurable():
+    p = FIIFlowParams(accumulate_fii_cr=-5_000.0, accumulate_rsi_below=80.0)
+    idx = index_frame(falling_index())
+    res = FIIFlowStrategy(p).generate(MarketContext(
+        as_of=dt.date(2026, 9, 18), daily=pd.DataFrame(), index_daily=idx,
+        flows=flows(-6_000.0, 12_000.0)))
+    assert res.ok is True
+    assert res.signals[0].metrics["phase"] == "ACCUMULATION"
+
+
+def test_all_three_strategies_run_together():
+    df = make_daily({f"S{i:02d}": 0.002 - i * 0.0001 for i in range(5)})
+    idx = index_frame(falling_index())
+    ctx = MarketContext(as_of=dt.date(2026, 9, 18), daily=df,
+                        index_daily=idx, flows=flows(-18_500.0, 14_200.0),
+                        india_vix=19.5, valuation={"pe": 18.0})
+    out = run_all(ctx)
+    assert set(out) >= {"momentum", "mean_reversion", "fii_flow"}
+    assert out["momentum"].ok is True
+    assert out["fii_flow"].ok is True
+
+
+# =========================================================================
+# In the application
+# =========================================================================
+from tests.test_gui_api import build_root, seed          # noqa: E402
+from tests.test_index_names import j, recent_end          # noqa: E402
+from app.gui.server import create_app                     # noqa: E402
+
+
+@pytest.fixture()
+def app_with_data(tmp_path):
+    app = create_app(str(build_root(tmp_path)))
+    app.config["TESTING"] = True
+    seed(app, n_syms=8, n_days=400, end=recent_end())
+    return app
+
+
+def test_strategy_endpoint_before_any_run(app_with_data):
+    d = j(app_with_data.test_client().get("/api/strategies"))
+    assert d["available"] is False
+    assert set(d["known"]) >= {"momentum", "mean_reversion", "fii_flow"}
+    assert all(d["enabled"].values())
+    assert "RUN STRATEGIES" in d["message"]
+
+
+def test_each_strategy_can_be_toggled_independently(app_with_data):
+    c = app_with_data.test_client()
+    assert j(c.post("/api/strategies/momentum/enabled",
+                    json={"enabled": False}))["enabled"] is False
+    d = j(c.get("/api/strategies"))
+    assert d["enabled"]["momentum"] is False
+    assert d["enabled"]["fii_flow"] is True          # untouched
+
+
+def test_unknown_strategy_toggle_is_404(app_with_data):
+    r = app_with_data.test_client().post("/api/strategies/nope/enabled",
+                                         json={"enabled": True})
+    assert r.status_code == 404
+
+
+def test_strategy_job_runs_and_is_served_back(app_with_data):
+    from app.gui.jobs import Job
+    from app.gui.pipeline import run_strategies_job
+
+    out = run_strategies_job(Job(id="s", name="s"),
+                             app_with_data.config["DB"],
+                             app_with_data.config["SETTINGS"], {})
+    assert set(out["ran"]) >= {"momentum", "mean_reversion", "fii_flow"}
+
+    served = j(app_with_data.test_client().get("/api/strategies"))
+    assert served["available"] is True
+    assert served["as_of"] == out["as_of"]
+
+
+def test_disabled_strategy_is_skipped_by_the_job(app_with_data):
+    from app.gui.jobs import Job
+    from app.gui.pipeline import run_strategies_job
+
+    app_with_data.test_client().post("/api/strategies/momentum/enabled",
+                                     json={"enabled": False})
+    out = run_strategies_job(Job(id="s", name="s"),
+                             app_with_data.config["DB"],
+                             app_with_data.config["SETTINGS"], {})
+    assert out["strategies"]["momentum"]["ok"] is False
+    assert "Disabled" in out["strategies"]["momentum"]["skipped_reason"]
+
+
+def test_context_built_from_the_database_has_no_lookahead(app_with_data):
+    from app.gui.pipeline import build_market_context
+
+    ctx = build_market_context(app_with_data.config["DB"],
+                               app_with_data.config["SETTINGS"])
+    ctx.assert_no_lookahead()          # must not raise
+    assert ctx.as_of is not None
+
+
+def test_strategy_job_without_data_says_what_to_press(tmp_path):
+    from app.gui.jobs import Job
+    from app.gui.pipeline import run_strategies_job
+
+    app = create_app(str(build_root(tmp_path)))
+    with pytest.raises(ValueError, match="UPDATE & ANALYZE MARKET"):
+        run_strategies_job(Job(id="s", name="s"), app.config["DB"],
+                           app.config["SETTINGS"], {})

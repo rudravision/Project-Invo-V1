@@ -561,3 +561,101 @@ def run_robustness_job(job, db, settings, body: dict) -> dict:
 
     cb("Done.", job.total, job.total)
     return out
+
+
+# --------------------------------------------------------------------------- #
+def build_market_context(db, settings, as_of=None):
+    """Assemble everything the strategies are allowed to see.
+
+    One place builds the context, so a strategy can never quietly reach past
+    `as_of` into the database on its own.
+    """
+    from app.data.macro import india_vix_latest, latest_valuation, rolling_net
+    from app.strategies import MarketContext
+
+    daily, idx, sectors, deliv = _load(db)
+    if daily.empty:
+        return None
+    if as_of is None:
+        as_of = pd.to_datetime(daily["date"]).max().date()
+
+    vix = india_vix_latest(db)
+    try:
+        flows = rolling_net(db, window=20)
+    except Exception:  # noqa: BLE001 - table may not exist on old databases
+        flows = None
+
+    return MarketContext(
+        as_of=as_of, daily=daily, sectors=sectors, index_daily=idx,
+        delivery=deliv or {}, flows=flows,
+        valuation=latest_valuation(db),
+        india_vix=(vix or {}).get("value"),
+        holdings={}, capital=float(settings_capital(db)))
+
+
+def settings_capital(db, default=1_000_000.0) -> float:
+    try:
+        conn = db.connect()
+        try:
+            r = conn.execute("SELECT value FROM app_settings WHERE key=?",
+                             ("capital",)).fetchone()
+        finally:
+            conn.close()
+        return float(json.loads(r["value"])) if r else default
+    except Exception:  # noqa: BLE001
+        return default
+
+
+def run_strategies_job(job, db, settings, body: dict) -> dict:
+    """Run every enabled strategy and return their signals."""
+    from app.strategies import available, run_all
+
+    cb = progress_adapter(job)
+    names = body.get("strategies") or available()
+    job.total = len(names) + 1
+
+    cb("Loading market data...", 0, job.total)
+    ctx = build_market_context(db, settings)
+    if ctx is None:
+        raise ValueError("There is no market data yet. Press UPDATE & "
+                         "ANALYZE MARKET first.")
+    ctx.assert_no_lookahead()
+
+    enabled = {}
+    for n in names:
+        enabled[n] = bool(_get_flag(db, f"strategy_{n}_enabled", True))
+
+    cb("Running strategies...", 1, job.total)
+    results = run_all(ctx, names=names, enabled_map=enabled)
+
+    out = {"as_of": str(ctx.as_of),
+           "strategies": {k: v.to_dict() for k, v in results.items()},
+           "ran": sorted(results),
+           "with_signals": sorted(k for k, v in results.items() if v.signals)}
+
+    rdir = settings.root / "reports"
+    rdir.mkdir(parents=True, exist_ok=True)
+    stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    (rdir / f"strategies_{stamp}.json").write_text(
+        json.dumps(out, indent=2, default=str), encoding="utf-8")
+
+    with db.tx() as conn:
+        conn.execute("INSERT OR REPLACE INTO app_settings (key,value)"
+                     " VALUES ('last_strategy_run', ?)",
+                     (json.dumps(out, default=str),))
+
+    cb("Done.", job.total, job.total)
+    return out
+
+
+def _get_flag(db, key, default=True) -> bool:
+    try:
+        conn = db.connect()
+        try:
+            r = conn.execute("SELECT value FROM app_settings WHERE key=?",
+                             (key,)).fetchone()
+        finally:
+            conn.close()
+        return default if r is None else bool(json.loads(r["value"]))
+    except Exception:  # noqa: BLE001
+        return default
