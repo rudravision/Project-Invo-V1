@@ -7,9 +7,19 @@ numpy>=1.24
 requests>=2.31
 PyYAML>=6.0
 
-# Dashboard (local only, no cloud)
-streamlit>=1.30
-plotly>=5.18
+# Desktop interface (local only, no cloud, no CDN).
+# Flask serves the window's contents from your own machine on 127.0.0.1.
+Flask>=3.0
+
+# Optional: gives a real borderless desktop window instead of a browser
+# window. If it will not install, TRADING_AI falls back to Chrome/Edge in
+# app mode and still works exactly the same.
+pywebview>=4.4; platform_system == "Windows"
+
+# Legacy Streamlit dashboard (optional, superseded by the new interface).
+# Uncomment if you still want `dashboard/app.py`.
+# streamlit>=1.30
+# plotly>=5.18
 
 # ML - only needed from step 13 onward
 scikit-learn>=1.3

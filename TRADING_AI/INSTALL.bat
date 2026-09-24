@@ -78,15 +78,36 @@ if not exist "%TRADING_AI_ROOT%\config\.env" (
     ) > "%TRADING_AI_ROOT%\config\.env"
 )
 
+REM ---- desktop shortcut -----------------------------------------------------
+echo.
+echo Creating a desktop shortcut...
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+ "$s=(New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath('Desktop')+'\TRADING_AI.lnk');" ^
+ "$s.TargetPath='%TRADING_AI_ROOT%\TRADING_AI.bat';" ^
+ "$s.WorkingDirectory='%TRADING_AI_ROOT%';" ^
+ "$s.IconLocation='%SystemRoot%\System32\SHELL32.dll,137';" ^
+ "$s.Description='TRADING_AI - market research and decision support';" ^
+ "$s.Save()" >nul 2>&1
+if exist "%USERPROFILE%\Desktop\TRADING_AI.lnk" (
+    echo   Desktop shortcut created.
+) else (
+    echo   Could not create the shortcut - you can still use TRADING_AI.bat.
+)
+
 echo.
 echo ============================================================
 echo  INSTALL COMPLETE
 echo ============================================================
 echo.
-echo  Next steps:
-echo    1. SYSTEM_CHECK.bat        - verify everything
-echo    2. python scripts\probe_sources.py   - test which data sources work
-echo    3. python scripts\bootstrap_data.py  - download a small real sample
-echo    4. START_TRADING_AI.bat    - run the pipeline
+echo  TO START:  double-click TRADING_AI on your desktop,
+echo             or TRADING_AI.bat in this folder.
+echo.
+echo  Then click the big UPDATE ^& ANALYZE MARKET button.
+echo  Everything else happens in the window - no commands needed.
+echo.
+echo  Advanced / troubleshooting only:
+echo    SYSTEM_CHECK.bat                     - verify the installation
+echo    python scripts\repair_data.py --diagnose   - inspect data problems
+echo    python scripts\sync_data.py --period 5y    - download from the CMD
 echo.
 pause

@@ -81,13 +81,39 @@ def validate_daily_v2(df: Any, db, *, max_staleness_sessions: int = 3,
                 (SESSION, latest_date.isoformat())).fetchone()[0]
         finally:
             conn.close()
-        if newer > max_staleness_sessions:
-            rep.add("stale_data", "ERROR", newer,
-                    f"{newer} confirmed trading sessions have happened since "
-                    f"the newest bar ({latest_date}). Data is out of date.")
-        elif newer:
-            rep.add("stale_data", "WARN", newer,
-                    f"{newer} session(s) newer than {latest_date} not yet loaded")
+        # A confirmed session we already know about and have not loaded is
+        # the obvious case. The subtler one: the CALENDAR itself may be out
+        # of date, in which case there are no "newer sessions" to count and
+        # a year-old database would look perfectly fresh. So also count the
+        # weekdays since the newest bar that have never been classified.
+        unchecked_recent = 0
+        conn = db.connect()
+        try:
+            known = {r[0] for r in conn.execute(
+                "SELECT date FROM market_sessions WHERE date > ? AND status"
+                " IN ('SESSION','HOLIDAY','WEEKEND')",
+                (latest_date.isoformat(),)).fetchall()}
+        finally:
+            conn.close()
+        probe = latest_date + dt.timedelta(days=1)
+        today = dt.date.today()
+        while probe <= today:
+            if probe.weekday() < 5 and probe.isoformat() not in known:
+                unchecked_recent += 1
+            probe += dt.timedelta(days=1)
+
+        behind = newer + unchecked_recent
+        if behind > max_staleness_sessions:
+            extra = (f" ({newer} confirmed, {unchecked_recent} weekday(s) "
+                     f"never checked)" if unchecked_recent else "")
+            rep.add("stale_data", "ERROR", behind,
+                    f"Up to {behind} trading sessions have happened since "
+                    f"the newest bar ({latest_date}){extra}. "
+                    f"Data is out of date.")
+        elif behind:
+            rep.add("stale_data", "WARN", behind,
+                    f"{behind} session(s) newer than {latest_date} not yet "
+                    f"loaded")
 
     # ---- session-aware coverage -----------------------------------------
     if run_gap_analysis:

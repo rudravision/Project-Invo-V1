@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TRADING_AI</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div id="titlebar">
+  <div class="brand">TRADING<span>_AI</span></div>
+  <div class="tagline">Research &amp; decision support &mdash; not a guarantee of profit</div>
+  <div id="clock"></div>
+</div>
+
+<div id="shell">
+  <nav id="sidebar">
+    <a class="nav active" data-page="dashboard"><i>▤</i>Dashboard</a>
+    <a class="nav" data-page="heatmap"><i>▦</i>Sector Heatmap</a>
+    <a class="nav" data-page="trades"><i>▲</i>Trade Ideas</a>
+    <a class="nav" data-page="chart"><i>◪</i>Charts</a>
+    <a class="nav" data-page="backtest"><i>◷</i>Backtest</a>
+    <a class="nav" data-page="sources"><i>◈</i>Data Sources</a>
+    <a class="nav" data-page="settings"><i>⚙</i>Settings</a>
+    <a class="nav" data-page="telegram"><i>✈</i>Telegram</a>
+    <a class="nav" data-page="backups"><i>⛃</i>Backups</a>
+    <a class="nav" data-page="logs"><i>≡</i>Logs</a>
+    <div class="spacer"></div>
+    <button id="bigButton" class="bigbtn">UPDATE &amp; ANALYZE MARKET</button>
+    <div id="jobBox" class="jobbox hidden">
+      <div class="jobname" id="jobName"></div>
+      <div class="bar"><div class="fill" id="jobFill"></div></div>
+      <div class="jobmsg" id="jobMsg"></div>
+      <div class="jobcount" id="jobCount"></div>
+      <button id="cancelJob" class="mini">Stop</button>
+    </div>
+  </nav>
+
+  <main id="main">
+
+    <!-- ================================================= DASHBOARD -->
+    <section class="page active" id="page-dashboard">
+      <div id="gateBanner"></div>
+
+      <div class="cards">
+        <div class="card"><div class="k">NIFTY 50</div>
+          <div class="v" id="c-nifty">—</div><div class="s" id="c-niftysub"></div></div>
+        <div class="card"><div class="k">Market Direction</div>
+          <div class="v" id="c-market">—</div><div class="s" id="c-marketsub"></div></div>
+        <div class="card"><div class="k">Market Breadth</div>
+          <div class="v" id="c-breadth">—</div><div class="s" id="c-breadthsub"></div></div>
+        <div class="card"><div class="k">Strongest Sector</div>
+          <div class="v small" id="c-strong">—</div><div class="s" id="c-strongsub"></div></div>
+        <div class="card"><div class="k">Weakest Sector</div>
+          <div class="v small" id="c-weak">—</div><div class="s" id="c-weaksub"></div></div>
+        <div class="card"><div class="k">Last Data Update</div>
+          <div class="v small" id="c-update">—</div><div class="s" id="c-updatesub"></div></div>
+        <div class="card"><div class="k">Database Health</div>
+          <div class="v small" id="c-db">—</div><div class="s" id="c-dbsub"></div></div>
+        <div class="card"><div class="k">Signal Status</div>
+          <div class="v small" id="c-signal">—</div><div class="s" id="c-signalsub"></div></div>
+      </div>
+
+      <div class="row2">
+        <div class="panel">
+          <h3>Data Coverage</h3>
+          <div id="coverage" class="kv"></div>
+        </div>
+        <div class="panel">
+          <h3>Probability Model</h3>
+          <div id="calib" class="kv"></div>
+          <button class="btn ghost" data-run="calibrate">Rebuild Calibration</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Sectors at a Glance</h3>
+        <div id="miniheat" class="heatgrid"></div>
+      </div>
+    </section>
+
+    <!-- =================================================== HEATMAP -->
+    <section class="page" id="page-heatmap">
+      <h2>Sector Heatmap</h2>
+      <div class="legend">
+        <span class="sw strong_bull"></span>Strong Bullish
+        <span class="sw bull"></span>Bullish
+        <span class="sw neutral"></span>Neutral
+        <span class="sw bear"></span>Bearish
+        <span class="sw strong_bear"></span>Strong Bearish
+      </div>
+      <div id="heatgrid" class="heatgrid big"></div>
+      <h3>Broad Market Indices</h3>
+      <div id="broadgrid" class="heatgrid"></div>
+      <div class="panel" id="sectorStocksPanel" style="display:none">
+        <h3 id="sectorStocksTitle"></h3>
+        <div id="sectorStocks"></div>
+      </div>
+    </section>
+
+    <!-- ==================================================== TRADES -->
+    <section class="page" id="page-trades">
+      <h2>Trade Ideas</h2>
+      <div id="tradeBlocked"></div>
+      <div class="panel" id="riskPanel">
+        <h3>Capital &amp; Risk</h3>
+        <div class="form inline">
+          <label>Trading capital (₹)<input id="r-capital" type="number" step="10000"></label>
+          <label>Max risk per trade (%)<input id="r-risk" type="number" step="0.1"></label>
+          <label>Max positions<input id="r-pos" type="number"></label>
+          <label>Max daily loss (%)<input id="r-daily" type="number" step="0.1"></label>
+          <label>Direction<select id="r-dir">
+            <option value="both">Long &amp; Short</option>
+            <option value="long">Long only</option>
+            <option value="short">Short only</option></select></label>
+          <label>Stop method<select id="r-stop">
+            <option value="atr">ATR based</option>
+            <option value="percent">Fixed percent</option></select></label>
+          <button class="btn" id="saveRisk">Apply</button>
+        </div>
+        <div id="portfolio" class="kv wide"></div>
+      </div>
+      <h3 class="long">TOP LONG CANDIDATES</h3>
+      <div id="longs"></div>
+      <h3 class="short">TOP SHORT / BEARISH CANDIDATES</h3>
+      <div id="shorts"></div>
+    </section>
+
+    <!-- ===================================================== CHART -->
+    <section class="page" id="page-chart">
+      <h2>Chart</h2>
+      <div class="form inline">
+        <label>Symbol<input id="chartSym" placeholder="RELIANCE"></label>
+        <span class="ranges" id="ranges">
+          <button class="rb" data-r="1M">1M</button><button class="rb" data-r="3M">3M</button>
+          <button class="rb" data-r="6M">6M</button><button class="rb active" data-r="1Y">1Y</button>
+          <button class="rb" data-r="3Y">3Y</button><button class="rb" data-r="5Y">5Y</button>
+        </span>
+        <button class="btn" id="loadChart">Load</button>
+      </div>
+      <div id="chartInfo" class="kv wide"></div>
+      <div class="chartwrap">
+        <canvas id="cPrice" height="380"></canvas>
+        <canvas id="cVol" height="90"></canvas>
+        <canvas id="cRsi" height="110"></canvas>
+        <canvas id="cMacd" height="110"></canvas>
+      </div>
+    </section>
+
+    <!-- ================================================== BACKTEST -->
+    <section class="page" id="page-backtest">
+      <h2>Backtest</h2>
+      <p class="note">Walk-forward, out-of-sample. Costs included: brokerage,
+        STT, exchange charges, GST, stamp duty and slippage. Entries are taken
+        at the next session's open from the previous close's ranking, so the
+        test cannot see the future.</p>
+      <button class="btn" data-run="backtest">RUN BACKTEST</button>
+      <div id="btResult"></div>
+      <canvas id="cEquity" height="260"></canvas>
+    </section>
+
+    <!-- =================================================== SOURCES -->
+    <section class="page" id="page-sources">
+      <h2>Data Sources</h2>
+      <p class="note">Only public and authorised sources are used. We never
+        bypass logins, CAPTCHAs, rate limits or a 403 response.</p>
+      <button class="btn" id="probeBtn">TEST ALL SOURCES</button>
+      <div id="srcSummary" class="kv wide"></div>
+      <div id="srcTable"></div>
+      <h3>Recent Fallbacks &amp; Failures</h3>
+      <div id="srcFails"></div>
+    </section>
+
+    <!-- ================================================== SETTINGS -->
+    <section class="page" id="page-settings">
+      <h2>Settings</h2>
+      <div class="panel"><h3>Money &amp; Risk</h3><div class="form" id="setMoney"></div></div>
+      <div class="panel"><h3>Data</h3><div class="form" id="setData"></div></div>
+      <div class="actions">
+        <button class="btn" id="saveSettings">SAVE SETTINGS</button>
+        <button class="btn warn" id="resetSettings">RESET TO SAFE DEFAULTS</button>
+      </div>
+      <div id="setMsg"></div>
+    </section>
+
+    <!-- ================================================== TELEGRAM -->
+    <section class="page" id="page-telegram">
+      <h2>Telegram Alerts <span class="opt">(optional)</span></h2>
+      <p class="note">Paste the two values from BotFather. They are stored in a
+        protected file on your SSD and never written to the logs.</p>
+      <div class="form">
+        <label>Bot Token<input id="tgToken" type="password" placeholder="123456:ABC-..."></label>
+        <label>Chat ID<input id="tgChat" placeholder="123456789"></label>
+      </div>
+      <div class="actions">
+        <button class="btn" id="tgSave">SAVE</button>
+        <button class="btn ghost" id="tgTest">TEST TELEGRAM</button>
+      </div>
+      <div id="tgMsg"></div>
+    </section>
+
+    <!-- =================================================== BACKUPS -->
+    <section class="page" id="page-backups">
+      <h2>Backups</h2>
+      <div class="actions">
+        <button class="btn" data-run="backup">BACKUP NOW</button>
+      </div>
+      <div id="backupList"></div>
+    </section>
+
+    <!-- ====================================================== LOGS -->
+    <section class="page" id="page-logs">
+      <h2>Technical Logs <span class="opt">(for troubleshooting)</span></h2>
+      <div class="tabs">
+        <button class="tab active" data-log="app">Application</button>
+        <button class="tab" data-log="quality">Data Quality</button>
+        <button class="tab" data-log="gaps">Data Gaps</button>
+        <button class="tab" data-log="corporate">Unresolved Corporate Actions</button>
+      </div>
+      <div id="logBody"></div>
+    </section>
+
+  </main>
+</div>
+
+<div id="toast"></div>
+<div id="modal" class="hidden"><div class="mbox"><div id="modalBody"></div>
+  <button class="btn" id="modalClose">Close</button></div></div>
+
+<script src="charts.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
