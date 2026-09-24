@@ -22,13 +22,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from app.alerts.telegram import TelegramNotifier
 from app.analytics.indicators import add_indicator_set
+from app.analytics.indices import (display as idx_display, is_broad,
+                                   is_sector, norm as idx_norm, pick_row,
+                                   sector_label)
 from app.analytics.probability import Calibrator, MODEL_VERSION
 from app.analytics.ranking import RankConfig, rank_stocks, sector_heatmap
 from app.analytics.recommend import (RiskSettings, generate_candidates,
                                      portfolio_summary)
 from app.core.config import load_settings
 from app.data.calendar import MarketCalendar, SymbolLifecycle
-from app.data.corporate_actions import unresolved_report
+from app.data.corporate_actions import (quarantine_summary,
+                                        quarantined_symbols,
+                                        symbols_with_extreme_jumps,
+                                        unresolved_report)
 from app.data.quality2 import explain_for_humans, validate_daily_v2
 from app.data.repair import analyse_gaps
 from app.db.database import Database, graceful_shutdown
@@ -41,13 +47,6 @@ log = logging.getLogger(__name__)
 
 STATIC = Path(__file__).parent / "static"
 
-SECTOR_INDICES = [
-    "NIFTY BANK", "NIFTY IT", "NIFTY AUTO", "NIFTY FMCG", "NIFTY PHARMA",
-    "NIFTY METAL", "NIFTY REALTY", "NIFTY ENERGY",
-    "NIFTY FINANCIAL SERVICES", "NIFTY PSU BANK", "NIFTY PVT BANK",
-    "NIFTY MEDIA", "NIFTY HEALTHCARE INDEX", "NIFTY CONSUMER DURABLES",
-    "NIFTY OIL & GAS", "NIFTY INFRASTRUCTURE", "NIFTY COMMODITIES",
-]
 
 SETTING_DEFAULTS = {
     "capital": 1_000_000.0, "risk_per_trade_pct": 1.0, "max_positions": 5,
@@ -89,6 +88,58 @@ def _quieten_request_log() -> None:
     warnings and errors still come through at WARNING and above.
     """
     logging.getLogger("werkzeug").setLevel(logging.WARNING)
+
+
+def _depth_note(start: str | None, end: str | None, requested: str
+                ) -> str | None:
+    """Say plainly how much history actually exists.
+
+    The user can ask for 5 years, but NSE's public UDiFF archive only goes
+    back so far. Reporting the request as though it were delivered would be
+    dishonest, so the dashboard states the real span instead.
+    """
+    if not start or not end:
+        return None
+    want = {"3m": 0.25, "6m": 0.5, "1y": 1.0, "2y": 2.0, "3y": 3.0,
+            "5y": 5.0}.get(requested)
+    try:
+        d0 = dt.date.fromisoformat(str(start)[:10])
+        d1 = dt.date.fromisoformat(str(end)[:10])
+    except ValueError:
+        return None
+    years = (d1 - d0).days / 365.25
+    have = (f"{years:.1f} years of history "
+            f"({start} to {end})")
+    if want and years < want * 0.9:
+        return (f"You asked for {requested}, but only {have} is available "
+                f"from the free NSE archive. Everything shown uses the real "
+                f"span, not the requested one.")
+    return f"{have[0].upper()}{have[1:]}."
+
+
+def _quarantine_note(q: dict) -> dict:
+    """Describe the excluded stocks in words the user can act on."""
+    return {"count": len(q), "symbols": sorted(q), "reasons": q,
+            "note": (f"{len(q)} stock(s) are excluded from recommendations "
+                     f"because of an unexplained large price move. The rest "
+                     f"of the market is unaffected.") if q else
+                    "No stocks are excluded."}
+
+
+def _quarantine_payload(db, daily=None) -> dict:
+    """Which stocks are excluded from recommendations, and why."""
+    q = {}
+    try:
+        if daily is not None:
+            q.update(symbols_with_extreme_jumps(daily))
+        q.update(quarantined_symbols(db))
+    except Exception:  # noqa: BLE001
+        pass
+    return {"count": len(q), "symbols": sorted(q), "reasons": q,
+            "note": (f"{len(q)} stock(s) are excluded from recommendations "
+                     f"because of an unexplained large price move. The rest "
+                     f"of the market is unaffected.") if q else
+                    "No stocks are excluded."}
 
 
 def create_app(root: str | None = None) -> Flask:
@@ -154,12 +205,34 @@ def create_app(root: str | None = None) -> Flask:
             reward_multiple=float(s["reward_multiple"]),
             max_position_pct=float(s["max_position_pct"]))
 
-    def load_frames():
+    def load_frames(adjusted: bool = True):
+        """Load prices. Uses the corporate-action adjusted series when one
+        has been built, because indicators computed across an unadjusted
+        split are simply wrong. Falls back to raw prices otherwise."""
         conn = db.connect()
         try:
             daily = pd.read_sql_query(
                 "SELECT symbol,date,open,high,low,close,volume,is_synthetic"
                 " FROM daily_ohlc ORDER BY symbol,date", conn)
+            if adjusted:
+                # Overlay the split-adjusted series for the stocks that have
+                # one. Only an overlay, never a replacement: swapping the
+                # whole table would silently drop every stock that never
+                # needed an adjustment, which is nearly all of them.
+                try:
+                    adj = pd.read_sql_query(
+                        "SELECT symbol,date,open,high,low,close,volume"
+                        " FROM daily_ohlc_adjusted ORDER BY symbol,date",
+                        conn)
+                except Exception:  # noqa: BLE001
+                    adj = pd.DataFrame()
+                if not adj.empty:
+                    adj["is_synthetic"] = 0
+                    keep = daily[~daily["symbol"].isin(set(adj["symbol"]))]
+                    daily = (pd.concat([keep, adj[daily.columns]],
+                                       ignore_index=True)
+                             .sort_values(["symbol", "date"])
+                             .reset_index(drop=True))
             idx = pd.read_sql_query(
                 "SELECT index_name,date,close,change_pct,is_synthetic"
                 " FROM index_ohlc ORDER BY index_name,date", conn)
@@ -215,27 +288,37 @@ def create_app(root: str | None = None) -> Flask:
         # market snapshot
         nifty = market = breadth = None
         strongest = weakest = None
+        daily = None
         heat = []
         if has_real:
             daily, idx, sectors, _ = load_frames()
             if not idx.empty:
                 hm = sector_heatmap(idx[idx["is_synthetic"] == 0])
-                heat = _clean(hm.to_dict("records")) if not hm.empty else []
-                n50 = hm[hm["index_name"] == "NIFTY 50"]
-                if len(n50):
-                    r = n50.iloc[0]
+                if not hm.empty:
+                    known = hm[hm["index_name"].map(
+                        lambda n: is_sector(n) or is_broad(n))]
+                    heat = _clean(known.to_dict("records"))
+                    for h in heat:
+                        h["label"] = idx_display(h["index_name"])
+                else:
+                    heat = []
+                r = pick_row(hm, which="nifty50")
+                if r is not None:
                     nifty = {"value": float(r["last_close"]),
                              "change_pct": (float(r["ret_1d"])
                                             if pd.notna(r["ret_1d"]) else None),
                              "as_of": r["as_of"]}
                     market = _market_label(r.get("ret_1d"), r.get("ret_21d"))
-                sect = hm[hm["index_name"].isin(SECTOR_INDICES)]
+                sect = hm[hm["index_name"].map(is_sector)]
+                sect = sect[sect["ret_21d"].notna()]
                 if len(sect):
                     sect = sect.sort_values("ret_21d", ascending=False)
-                    strongest = _clean(sect.iloc[0][["index_name", "ret_21d"]]
-                                       .to_dict())
-                    weakest = _clean(sect.iloc[-1][["index_name", "ret_21d"]]
-                                     .to_dict())
+                    strongest = {"index_name": idx_display(
+                        sect.iloc[0]["index_name"]),
+                        "ret_21d": _clean(sect.iloc[0]["ret_21d"])}
+                    weakest = {"index_name": idx_display(
+                        sect.iloc[-1]["index_name"]),
+                        "ret_21d": _clean(sect.iloc[-1]["ret_21d"])}
             if not daily.empty:
                 breadth = _breadth(daily[daily["is_synthetic"] == 0])
 
@@ -270,7 +353,10 @@ def create_app(root: str | None = None) -> Flask:
             "coverage": {"rows": cov["n"], "symbols": cov["s"],
                          "start": cov["mn"], "end": cov["mx"],
                          "sessions": sess,
-                         "index_rows": idxn["n"], "indices": idxn["i"]},
+                         "index_rows": idxn["n"], "indices": idxn["i"],
+                         "requested_period": get_setting("history_period"),
+                         "depth_note": _depth_note(cov["mn"], cov["mx"],
+                                                   get_setting("history_period"))},
             "database": {"healthy": ok_db, "detail": detail_db,
                          "size_mb": round(settings.db_path.stat().st_size
                                           / 1024**2, 1)
@@ -281,6 +367,7 @@ def create_app(root: str | None = None) -> Flask:
             "heatmap": heat,
             "gate": gate,
             "calibration": cal.summary(),
+            "quarantined": _quarantine_payload(db, daily),
             "last_update": cov["mx"],
             "last_check": last_dq["checked_at"] if last_dq else None,
             "job": job.to_dict() if job else None,
@@ -335,10 +422,18 @@ def create_app(root: str | None = None) -> Flask:
         recs = _clean(hm.to_dict("records"))
         for r in recs:
             r["band"] = _band(r.get("ret_21d"))
-        return jsonify({
-            "sectors": [r for r in recs if r["index_name"] in SECTOR_INDICES],
-            "broad": [r for r in recs if r["index_name"] not in SECTOR_INDICES],
-        })
+            r["label"] = idx_display(r["index_name"])
+        sectors = [r for r in recs if is_sector(r["index_name"])]
+        broad = [r for r in recs if is_broad(r["index_name"])]
+        other = [r for r in recs
+                 if not is_sector(r["index_name"])
+                 and not is_broad(r["index_name"])]
+        msg = None
+        if not sectors:
+            msg = ("No sector indices have been downloaded yet. Run "
+                   "UPDATE & ANALYZE MARKET.")
+        return jsonify({"sectors": sectors, "broad": broad,
+                        "other_count": len(other), "message": msg})
 
     def _band(v):
         if v is None:
@@ -378,39 +473,59 @@ def create_app(root: str | None = None) -> Flask:
     @app.get("/api/recommendations")
     def api_recommendations():
         daily, idx, sectors, deliv = load_frames()
+        total_rows = len(daily)
         daily = daily[daily["is_synthetic"] == 0]
         idx = idx[idx["is_synthetic"] == 0]
         if daily.empty:
-            return jsonify({"blocked": True,
-                            "reason": "No market data yet.",
+            # Say WHY there is nothing, so a full database and an empty one
+            # never produce the same unhelpful message.
+            if total_rows:
+                reason = (f"The database holds {total_rows:,} rows but all of "
+                          f"them are test data, which is never used for real "
+                          f"recommendations.")
+            else:
+                reason = ("No price data has been downloaded yet. Press "
+                          "UPDATE & ANALYZE MARKET.")
+            return jsonify({"blocked": True, "reason": reason,
+                            "rows_total": total_rows, "rows_usable": 0,
                             "long": [], "short": []})
 
         rep = validate_daily_v2(daily, db, run_gap_analysis=True)
         if not rep.ok:
             return jsonify({
                 "blocked": True,
+                "quarantined": _quarantine_payload(db, daily),
                 "reason": "SIGNAL DISABLED - DATA QUALITY FAILURE",
                 "issues": explain_for_humans(rep), "long": [], "short": []})
+
+        # Drop stocks whose history we cannot trust. Their indicators would
+        # be computed across an unadjusted split, so any signal is garbage.
+        bad = dict(symbols_with_extreme_jumps(daily))
+        bad.update(quarantined_symbols(db))
+        quarantined = _quarantine_note(bad)
+        if bad:
+            daily = daily[~daily["symbol"].isin(bad)]
 
         ranked = rank_stocks(daily, RankConfig(), sectors=sectors)
         if ranked.empty:
             return jsonify({"blocked": True,
                             "reason": "Not enough price history to rank "
                                       "stocks yet. Download more history.",
+                            "quarantined": quarantined,
                             "long": [], "short": []})
 
         hm = sector_heatmap(idx) if not idx.empty else pd.DataFrame()
         sector_ranks = {}
         market_trend = "Unknown"
         if not hm.empty:
-            sect = hm[hm["index_name"].isin(SECTOR_INDICES)]
-            for r in sect.itertuples():
-                nm = r.index_name.replace("NIFTY ", "").title()
-                sector_ranks[nm] = float(r.momentum_rank)
-            n50 = hm[hm["index_name"] == "NIFTY 50"]
-            if len(n50):
-                market_trend = _market_label(n50.iloc[0].get("ret_1d"),
-                                             n50.iloc[0].get("ret_21d"))
+            for r in hm.itertuples():
+                lbl = sector_label(r.index_name)
+                if lbl:
+                    sector_ranks[lbl] = float(r.momentum_rank)
+            n50 = pick_row(hm, which="nifty50")
+            if n50 is not None:
+                market_trend = _market_label(n50.get("ret_1d"),
+                                             n50.get("ret_21d"))
 
         rs = risk_settings()
         cal = Calibrator(db)
@@ -427,6 +542,7 @@ def create_app(root: str | None = None) -> Flask:
             "portfolio": portfolio_summary(cands, rs),
             "risk": rs.to_dict(),
             "calibration": cal.summary(),
+            "quarantined": quarantined,
         }))
 
     # -------------------------------------------------------------- charts
@@ -436,11 +552,23 @@ def create_app(root: str | None = None) -> Flask:
         days = {"1M": 31, "3M": 92, "6M": 183, "1Y": 366, "3Y": 1096,
                 "5Y": 1827}.get(rng, 366)
         conn = db.connect()
+        adjusted = False
         try:
-            df = pd.read_sql_query(
-                "SELECT date,open,high,low,close,volume FROM daily_ohlc"
-                " WHERE symbol=? AND is_synthetic=0 ORDER BY date",
-                conn, params=[symbol.upper()])
+            # Chart the split-adjusted series when we have one: moving
+            # averages drawn across an unadjusted split are meaningless.
+            try:
+                df = pd.read_sql_query(
+                    "SELECT date,open,high,low,close,volume FROM"
+                    " daily_ohlc_adjusted WHERE symbol=? ORDER BY date",
+                    conn, params=[symbol.upper()])
+                adjusted = not df.empty
+            except Exception:  # noqa: BLE001
+                df = pd.DataFrame()
+            if df.empty:
+                df = pd.read_sql_query(
+                    "SELECT date,open,high,low,close,volume FROM daily_ohlc"
+                    " WHERE symbol=? AND is_synthetic=0 ORDER BY date",
+                    conn, params=[symbol.upper()])
         finally:
             conn.close()
         if df.empty:
@@ -462,6 +590,9 @@ def create_app(root: str | None = None) -> Flask:
 
         return jsonify(_clean({
             "symbol": symbol.upper(), "range": rng,
+            "adjusted": adjusted,
+            "price_note": ("Prices adjusted for splits and bonuses."
+                           if adjusted else "Prices as reported by NSE."),
             "dates": [d.strftime("%Y-%m-%d") for d in ind["date"]],
             "open": col("open"), "high": col("high"), "low": col("low"),
             "close": col("close"), "volume": col("volume"),

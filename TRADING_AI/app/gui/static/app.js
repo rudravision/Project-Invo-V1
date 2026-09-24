@@ -144,6 +144,8 @@
         kv("Confirmed sessions", c.sessions) +
         kv("Index rows", Number(c.index_rows).toLocaleString("en-IN") +
           " across " + c.indices + " indices") +
+        (c.depth_note ? kv("How much history",
+          "<span class='muted'>" + esc(c.depth_note) + "</span>") : "") +
         (s.synthetic_rows ? kv("Practice rows",
           "<span class='wrn'>" + s.synthetic_rows + " (never tradeable)</span>") : "");
 
@@ -267,7 +269,7 @@
   }
   function hcell(r, b) {
     return "<div class='hcell " + (r.band || b) + "' data-idx='" + esc(r.index_name) + "'>" +
-      "<div class='n'>" + esc(String(r.index_name).replace("NIFTY ", "")) + "</div>" +
+      "<div class='n'>" + esc(r.label || r.index_name) + "</div>" +
       "<div class='p'>" + pct(r.ret_21d, 1) + "</div>" +
       "<div class='d'>1d " + pct(r.ret_1d, 1) + " · 5d " + pct(r.ret_5d, 1) + "</div></div>";
   }
@@ -278,7 +280,8 @@
         $("#broadgrid").innerHTML = ""; return;
       }
       $("#heatgrid").innerHTML = h.sectors.map(function (r) { return hcell(r); }).join("")
-        || "<div class='empty'>No sector indices downloaded yet.</div>";
+        || "<div class='empty'>" + esc(h.message ||
+          "No sector indices downloaded yet.") + "</div>";
       $("#broadgrid").innerHTML = h.broad.map(function (r) { return hcell(r); }).join("");
       $$(".hcell").forEach(function (c) {
         c.onclick = function () { sectorStocks(c.dataset.idx); };
@@ -343,7 +346,15 @@
         $("#portfolio").innerHTML = "";
         return;
       }
-      $("#tradeBlocked").innerHTML = "";
+      var q = d.quarantined || {};
+      $("#tradeBlocked").innerHTML = q.count
+        ? "<div class='banner warn'><h4>" + q.count +
+          " stock(s) left out today</h4><p>" + esc(q.note) +
+          "</p><p class='muted small'>" +
+          esc(Object.keys(q.reasons || {}).sort().map(function (k) {
+            return k + ": " + q.reasons[k];
+          }).join(" · ")) + "</p></div>"
+        : "";
       $("#longs").innerHTML = d.long.length ? d.long.map(tcard).join("")
         : "<div class='empty'>No long candidate passes the filters today.</div>";
       $("#shorts").innerHTML = d.short.length ? d.short.map(tcard).join("")

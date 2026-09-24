@@ -23,6 +23,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from app.analytics.indices import pick_row, sector_label
 from app.analytics.probability import (Calibrator, build_calibration,
                                        persist_calibration)
 from app.analytics.ranking import RankConfig, rank_stocks, sector_heatmap
@@ -184,11 +185,12 @@ def full_update_job(job, db, settings, *, period="5y", universe="nifty200",
         market_trend = "Unknown"
         if not hm.empty:
             for r in hm.itertuples():
-                sector_ranks[r.index_name.replace("NIFTY ", "").title()] = \
-                    float(r.momentum_rank)
-            n50 = hm[hm["index_name"] == "NIFTY 50"]
-            if len(n50):
-                v = n50.iloc[0].get("ret_21d")
+                lbl = sector_label(r.index_name)
+                if lbl:
+                    sector_ranks[lbl] = float(r.momentum_rank)
+            n50 = pick_row(hm, which="nifty50")
+            if n50 is not None:
+                v = n50.get("ret_21d")
                 market_trend = ("Bullish" if (v or 0) > 1 else
                                 "Bearish" if (v or 0) < -1 else "Neutral")
         cands = generate_candidates(daily, ranked, sectors=sectors,
@@ -298,7 +300,8 @@ def run_backtest_job(job, db, settings, body: dict) -> dict:
 
     bench = None
     if not idx.empty:
-        b = idx[idx["index_name"] == "NIFTY 50"][["date", "close"]]
+        from app.analytics.indices import is_nifty50
+        b = idx[idx["index_name"].map(is_nifty50)][["date", "close"]]
         if len(b) > 20:
             bench = b
 

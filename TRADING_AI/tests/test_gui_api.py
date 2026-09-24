@@ -42,9 +42,10 @@ def build_root(tmp_path, *, n_syms=12, n_days=260, with_index=True):
     return root
 
 
-def seed(app, *, n_syms=12, n_days=260, with_index=True, synthetic=False):
+def seed(app, *, n_syms=12, n_days=260, with_index=True, synthetic=False,
+         end=None):
     db = app.config["DB"]
-    end = dt.date(2025, 9, 19)
+    end = end or dt.date(2025, 9, 19)
     days = sessions(end - dt.timedelta(days=int(n_days * 1.5)), end)[-n_days:]
     cal = MarketCalendar(db)
     cal.seed_weekends(days[0], days[-1])

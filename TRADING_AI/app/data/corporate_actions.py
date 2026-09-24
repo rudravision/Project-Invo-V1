@@ -280,3 +280,75 @@ def run_corporate_action_pass(db, progress=None) -> dict:
     adj = build_adjusted_series(db, progress=progress)
 
     return {"detected": len(events), **stats, "adjusted": adj}
+
+
+# --------------------------------------------------------------------------- #
+# Quarantine
+# --------------------------------------------------------------------------- #
+def quarantined_symbols(db, threshold: float = GAP_THRESHOLD) -> dict[str, str]:
+    """Stocks whose price history we do not trust, and why.
+
+    A stock with an overnight move we could not explain is either carrying an
+    unadjusted corporate action or bad vendor data. Either way its indicators
+    are wrong, so it must not produce a trade idea.
+
+    The alternative - refusing to show ANY recommendation because 17 stocks
+    out of 200 have unexplained jumps - disables the tool permanently, since
+    those are historical events that no amount of re-downloading will fix.
+    Excluding the affected stocks is both safer and more honest: the other
+    183 are unaffected and their data is sound.
+    """
+    conn = db.connect()
+    try:
+        rows = conn.execute(
+            "SELECT symbol, ex_date, detected_gap FROM adjustment_factors"
+            " WHERE confidence='UNRESOLVED' AND ABS(COALESCE(detected_gap,0))>=?",
+            (threshold,)).fetchall()
+    finally:
+        conn.close()
+
+    out: dict[str, str] = {}
+    for r in rows:
+        sym = r["symbol"]
+        note = (f"unexplained {float(r['detected_gap']):+.0%} move on "
+                f"{r['ex_date']}")
+        out[sym] = f"{out[sym]}; {note}" if sym in out else note
+    return out
+
+
+def quarantine_summary(db) -> dict:
+    q = quarantined_symbols(db)
+    return {"count": len(q), "symbols": sorted(q),
+            "reasons": q,
+            "note": (f"{len(q)} stock(s) are excluded from recommendations "
+                     f"because of an unexplained large price move. The rest "
+                     f"of the market is unaffected.") if q else
+                    "No stocks are quarantined."}
+
+
+EXTREME_GAP = 0.60
+
+
+def symbols_with_extreme_jumps(df, threshold: float = EXTREME_GAP
+                               ) -> dict[str, str]:
+    """Stocks showing an overnight move so large it cannot be a real move.
+
+    Derived straight from the price frame so quarantine still works before
+    the corporate-action detector has ever run on this database.
+    """
+    if df is None or len(df) == 0:
+        return {}
+    d = df.sort_values(["symbol", "date"]).copy()
+    prev = d.groupby("symbol")["close"].shift(1)
+    # Build the column before filtering. Assigning a full-length Series to an
+    # already-filtered (possibly empty) frame makes pandas reindex and invent
+    # all-NA rows, which produced a phantom quarantined symbol.
+    d["gap_pct"] = (d["close"] / prev) - 1
+    hit = d[prev.notna() & (d["gap_pct"].abs() > threshold)]
+    out: dict[str, str] = {}
+    for r in hit.itertuples():
+        day = getattr(r.date, "date", lambda: r.date)()
+        note = f"unexplained {r.gap_pct:+.0%} move on {day}"
+        out[r.symbol] = (f"{out[r.symbol]}; {note}"
+                         if r.symbol in out else note)
+    return out

@@ -65,6 +65,39 @@ def validate_daily_v2(df: Any, db, *, max_staleness_sessions: int = 3,
     rep.issues = [i for i in rep.issues
                   if i.check not in ("missing_candles", "stale_data")]
 
+    # ---- extreme jumps: exclude the stock, do not disable the market -----
+    # The base validator raises a hard ERROR the moment any overnight move
+    # exceeds 60%. Across 200 stocks and several years there will always be
+    # a handful, so that rule disabled every recommendation permanently -
+    # including for the ~90% of stocks whose data is perfectly sound.
+    #
+    # If we can name the affected stocks we quarantine them instead (see
+    # corporate_actions.quarantined_symbols) and downgrade this to a
+    # warning. If we cannot, it stays an ERROR.
+    try:
+        from .corporate_actions import (quarantined_symbols,
+                                        symbols_with_extreme_jumps)
+        quarantined = dict(symbols_with_extreme_jumps(df))
+        quarantined.update(quarantined_symbols(db))
+    except Exception:  # noqa: BLE001
+        quarantined = {}
+
+    for i in rep.issues:
+        if i.check == "extreme_price_jump" and i.severity == "ERROR":
+            if quarantined:
+                i.severity = "WARN"
+                i.detail = (
+                    f"{i.affected} overnight move(s) above 60% could not be "
+                    f"explained by a corporate action. The {len(quarantined)} "
+                    f"stock(s) involved are excluded from recommendations; "
+                    f"the rest of the market is unaffected.")
+            else:
+                i.detail = (
+                    f"{i.affected} overnight move(s) above 60% look like "
+                    f"unadjusted splits or bad data, and the affected stocks "
+                    f"could not be identified. Run an update so corporate "
+                    f"actions can be checked.")
+
     if df is None or len(df) == 0:
         return rep
 
