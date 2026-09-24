@@ -233,3 +233,7 @@ pre{background:#0a0d13;border:1px solid var(--line);border-radius:6px;padding:12
 .act{margin:0 0 18px}
 .act .btn{font-size:15px;padding:12px 22px}
 #todayHeading{margin:6px 0 10px}
+
+.striplist{list-style:none;margin:8px 0 0;padding:0}
+.striplist li{padding:7px 0;border-top:1px solid #1b2232;font-size:13px}
+.striplist li:first-child{border-top:none}

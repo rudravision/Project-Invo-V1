@@ -82,6 +82,7 @@
     if (page === "dashboard") refreshStatus();
     if (page === "heatmap") loadHeatmap();
     if (page === "trades") loadTrades();
+    if (page === "strategies") loadStrategies();
     if (page === "backtest") loadBacktest();
     if (page === "sources") loadSources();
     if (page === "settings") loadSettings();
@@ -696,6 +697,76 @@
       window.drawRsi($("#cRsi"), d); window.drawMacd($("#cMacd"), d);
     }
   });
+
+  /* ------------------------------------------------------ strategies */
+  function loadStrategies() {
+    api("/api/strategies").then(function (d) {
+      var known = d.known || [];
+      var res = d.strategies || {};
+      var h = "";
+      if (!d.available) {
+        h += "<div class='empty'>" + esc(d.message) + "</div>";
+      } else {
+        h += "<p class='muted small'>Last run for " + esc(d.as_of) + ".</p>";
+      }
+
+      known.forEach(function (n) {
+        var r = res[n] || {};
+        var on = (d.enabled || {})[n] !== false;
+        var sigs = r.signals || [];
+        var tone = !on ? "" : (sigs.length ? "good" : "warn");
+
+        h += "<div class='advice " + tone + "'>" +
+          "<h4>" + esc(pretty(n)) +
+          " <label class='simpletoggle' style='float:right;margin:0'>" +
+          "<input type='checkbox' data-strat='" + esc(n) + "'" +
+          (on ? " checked" : "") + "> on</label></h4>";
+
+        if (!on) {
+          h += "<p>Switched off.</p>";
+        } else if (sigs.length) {
+          h += "<p>" + sigs.length + " signal(s).</p><ul class='striplist'>";
+          sigs.slice(0, 8).forEach(function (s) {
+            h += "<li><b>" + esc(s.action) + " " + esc(s.symbol) + "</b>" +
+              (s.entry_price ? " at " + rupee(s.entry_price) : "") +
+              (s.stop_loss ? ", stop " + rupee(s.stop_loss) : "") +
+              (s.allocation_pct ? " &middot; " + s.allocation_pct + "% of this strategy" : "") +
+              "<div class='muted small'>" + esc(s.reasoning || "") + "</div></li>";
+          });
+          h += "</ul>";
+          if (sigs.length > 8) {
+            h += "<p class='muted small'>and " + (sigs.length - 8) + " more.</p>";
+          }
+        } else if (r.skipped_reason) {
+          h += "<p>" + esc(r.skipped_reason) + "</p>";
+        } else {
+          h += "<p>Not run yet.</p>";
+        }
+
+        if ((r.filters_skipped || []).length) {
+          h += "<p class='muted small'>Could not check: " +
+            esc(r.filters_skipped.join("; ")) + "</p>";
+        }
+        h += "</div>";
+      });
+
+      $("#stratResult").innerHTML = h;
+      $$("[data-strat]", $("#stratResult")).forEach(function (cb) {
+        cb.onchange = function () {
+          post("/api/strategies/" + cb.dataset.strat + "/enabled",
+               { enabled: cb.checked })
+            .then(function () { loadStrategies(); })
+            .catch(function (e) { toast(e.message, "err"); });
+        };
+      });
+    }).catch(function (e) { toast(e.message, "err"); });
+  }
+
+  function pretty(n) {
+    return String(n).replace(/_/g, " ").replace(/\b\w/g, function (m) {
+      return m.toUpperCase();
+    });
+  }
 
   /* -------------------------------------------------------- backtest */
   function loadBacktest() {

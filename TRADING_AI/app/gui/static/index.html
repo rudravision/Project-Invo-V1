@@ -25,6 +25,7 @@
       <a class="nav" data-page="dashboard"><i>▤</i>Dashboard</a>
       <a class="nav" data-page="heatmap"><i>▦</i>Sector Heatmap</a>
       <a class="nav" data-page="trades"><i>▲</i>Trade Ideas (detailed)</a>
+      <a class="nav" data-page="strategies"><i>⚗</i>Strategies</a>
       <a class="nav" data-page="backtest"><i>◷</i>Backtest</a>
       <a class="nav" data-page="sources"><i>◈</i>Data Sources</a>
       <a class="nav" data-page="telegram"><i>✈</i>Telegram</a>
@@ -176,6 +177,15 @@
     </section>
 
     <!-- ================================================== BACKTEST -->
+    <section class="page" id="page-strategies">
+      <h2>Strategies</h2>
+      <p class="note">Each strategy runs on its own and can be switched off
+        without affecting the others. A strategy that says nothing today is
+        working normally &mdash; most of these are designed to trade rarely.</p>
+      <button class="btn" data-run="strategies">RUN STRATEGIES</button>
+      <div id="stratResult"></div>
+    </section>
+
     <section class="page" id="page-backtest">
       <h2>Backtest</h2>
       <p class="note">Walk-forward, out-of-sample. Costs included: brokerage,
