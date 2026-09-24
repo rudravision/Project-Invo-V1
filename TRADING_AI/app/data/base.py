@@ -48,6 +48,8 @@ class Capability(str, enum.Enum):
     CORPORATE_ACTIONS = "corporate_actions"
     NEWS = "news"
     INDEX_MEMBERSHIP = "index_membership"
+    FII_DII_FLOWS = "fii_dii_flows"
+    VALUATION = "valuation"
 
 
 # Canonical OHLCV column names. Providers MUST map their native names to these.
@@ -236,6 +238,12 @@ class DataProvider(abc.ABC):
 
     def get_index_membership(self, index_slug: str) -> Any:
         raise NotSupportedError(f"{self.name} does not provide membership")
+
+    def get_fii_dii(self) -> Any:
+        raise NotSupportedError(f"{self.name} does not provide FII/DII flows")
+
+    def get_valuation(self, index_name: str = "Nifty 50") -> Any:
+        raise NotSupportedError(f"{self.name} does not provide valuation")
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__} name={self.name!r}>"

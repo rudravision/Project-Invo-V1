@@ -326,6 +326,27 @@ class NSEArchiveProvider(DataProvider):
         df["date"] = pd.to_datetime(df["date"], errors="coerce", dayfirst=True)
         return df[df["date"].dt.year == year] if year else df
 
+    def get_fii_dii(self):
+        """FII/DII cash-market activity for the latest published day.
+
+        This is an internal endpoint the NSE website itself calls. It is
+        public but undocumented, and it refuses unfamiliar clients with a
+        403. We send a browser-like User-Agent because that is what the
+        published page does - we do not defeat any access control, and a
+        403 is reported as unavailable, never worked around.
+        """
+        from app.data.macro import parse_nse_fiidii
+
+        url = f"{HOME}/api/fiidiiTradeReact"
+        r = self._get(url, headers={"Accept": "application/json",
+                                    "Referer": f"{HOME}/reports/fii-dii"})
+        rows = parse_nse_fiidii(r.json())
+        if not rows:
+            raise NotAvailableError(
+                "NSE returned no usable FII/DII rows. Download the CSV from "
+                "nseindia.com and import it instead.")
+        return rows
+
     def get_announcements(self, since: dt.date):
         """Corporate announcements (equities)."""
         import pandas as pd

@@ -187,10 +187,43 @@ CREATE TABLE IF NOT EXISTS confirmation_stats (
 );
 """
 
+
+# LAKSHMI Phase 1: market-wide data the stock tables cannot hold.
+# FII/DII flows and index valuation are per-DAY, not per-symbol.
+M004 = """
+CREATE TABLE IF NOT EXISTS fii_dii_flows (
+    date        TEXT PRIMARY KEY,
+    fii_buy     REAL,
+    fii_sell    REAL,
+    fii_net     REAL,
+    dii_buy     REAL,
+    dii_sell    REAL,
+    dii_net     REAL,
+    segment     TEXT DEFAULT 'cash',
+    source      TEXT,
+    created_at  TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS market_valuation (
+    date          TEXT NOT NULL,
+    index_name    TEXT NOT NULL,
+    pe            REAL,
+    pb            REAL,
+    div_yield     REAL,
+    close         REAL,
+    source        TEXT,
+    created_at    TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (date, index_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_valuation_date ON market_valuation(date);
+"""
+
 MIGRATIONS: list[tuple[str, str]] = [
     ("001_sessions_lifecycle_gaps", M001),
     ("002_settings_calibration", M002),
     ("003_confirmation_stats", M003),
+    ("004_macro_flows_valuation", M004),
 ]
 
 
