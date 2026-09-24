@@ -454,3 +454,17 @@ def test_backtest_reports_its_worst_day(real_names):
                            {"warmup": 130, "top_n": 3})
     assert out["stats"]["worst_day_pct"] <= 0
     assert out["stats"]["worst_day_date"]
+
+
+# ------------------------------------------------- version visibility ----
+def test_version_file_ships_with_the_code():
+    """The user must be able to confirm an update actually landed."""
+    v = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    assert v and v != "unknown"
+
+
+def test_version_is_reported_to_the_screen(real_names):
+    from app.gui.server import app_version
+    c, _, _ = real_names
+    assert j(c.get("/api/health"))["app_version"] == app_version()
+    assert j(c.get("/api/status"))["app_version"] == app_version()

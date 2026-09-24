@@ -40,20 +40,49 @@ Open it. Inside is a folder called **`TRADING_AI`**. Open that one too.
 You should now be looking at files like `TRADING_AI.bat`, `INSTALL.bat`,
 `app`, `scripts`, `docs`.
 
-### Step 4. Copy the new files over the old ones
+### Step 4. Update your copy — the easy way
 
-1. Press **Ctrl + A** to select everything in that folder.
-2. Press **Ctrl + C** to copy.
+Go **back one folder**, to the one named `Project-Invo-V1-arena-...`.
+
+Double-click **`UPDATE_MY_COPY.bat`**.
+
+It finds your existing `TRADING_AI` folder, shows you where it is going to
+copy to, and asks you to type **Y** and press Enter. Then it copies the new
+program files for you and tells you the new version number.
+
+Your database, downloaded prices, backups, logs, settings and Telegram
+details are **excluded from the copy**, so they cannot be overwritten.
+
+If Windows shows a blue "Windows protected your PC" box, click **More info**
+→ **Run anyway**. That box appears for any file downloaded from the internet.
+
+> **If it cannot find your folder**, it will ask you to paste the path. Open
+> `G:\Trading\TRADING_AI` in File Explorer, click once in the address bar,
+> press Ctrl+C, then paste it into the black window and press Enter.
+
+### Step 4 (alternative). Copy the files by hand
+
+Only if the button above did not work.
+
+1. Open the unzipped `Project-Invo-V1-arena-...` folder, then the
+   **`TRADING_AI`** folder inside it.
+2. Press **Ctrl + A** to select everything, then **Ctrl + C** to copy.
 3. Go to `G:\Trading\TRADING_AI`
 4. Press **Ctrl + V** to paste.
+5. When Windows asks, choose **Replace the files in the destination**.
 
-Windows will ask what to do about files that already exist. Choose:
+The most common mistake here is pasting the *outer* folder instead of the
+contents of the inner `TRADING_AI` folder. After pasting, check that
+`G:\Trading\TRADING_AI\VERSION` exists — if it does not, the files went to
+the wrong place.
 
-> **Replace the files in the destination**
+### Step 5. Check the update actually landed
 
-**This is safe.** The download contains program files only. Your database,
-your downloaded prices, your backups, your logs and your settings are not in
-it, so they cannot be overwritten.
+Open TRADING_AI and look at the **top of the window**, next to the title.
+It now shows **Version 2026.09.24.1** (or higher).
+
+If no version is shown at all, you are still running the old files — the
+copy did not reach the right folder.
 
 ---
 

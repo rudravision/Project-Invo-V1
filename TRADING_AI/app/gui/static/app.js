@@ -140,6 +140,9 @@
       $("#c-signalsub").textContent = blocked
         ? "Recommendations are switched off" : "Data checks passed";
 
+      if (s.app_version) {
+        $("#appVersion").textContent = "Version " + s.app_version;
+      }
       var c = s.coverage;
       $("#coverage").innerHTML =
         kv("Price rows", Number(c.rows).toLocaleString("en-IN")) +

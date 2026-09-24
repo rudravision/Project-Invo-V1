@@ -118,6 +118,19 @@ def _depth_note(start: str | None, end: str | None, requested: str
     return f"{have[0].upper()}{have[1:]}."
 
 
+def app_version() -> str:
+    """The version of the program files, so the user can confirm an update.
+
+    Written as a plain VERSION file next to the code. If it is missing we
+    say so rather than guessing.
+    """
+    try:
+        return (Path(__file__).resolve().parents[2] / "VERSION"
+                ).read_text(encoding="utf-8").strip() or "unknown"
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
 def _quarantine_note(q: dict) -> dict:
     """Describe the excluded stocks in words the user can act on."""
     return {"count": len(q), "symbols": sorted(q), "reasons": q,
@@ -354,6 +367,7 @@ def create_app(root: str | None = None) -> Flask:
             "last_check": last_dq["checked_at"] if last_dq else None,
             "job": job.to_dict() if job else None,
             "root": str(settings.root),
+            "app_version": app_version(),
         }))
 
     def _market_label(r1, r21):
@@ -987,7 +1001,8 @@ def create_app(root: str | None = None) -> Flask:
 
     @app.get("/api/health")
     def api_health():
-        return jsonify({"ok": True, "version": MODEL_VERSION})
+        return jsonify({"ok": True, "version": MODEL_VERSION,
+                        "app_version": app_version()})
 
     return app
 
