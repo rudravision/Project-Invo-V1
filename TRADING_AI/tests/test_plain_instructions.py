@@ -258,3 +258,74 @@ def test_today_uses_the_plain_cards_not_the_technical_grid():
     today = js.split("function loadTodayIdeas()")[1].split("\n  function ")[0]
     assert "pcard" in today          # plain instruction cards
     assert "cell(" not in today      # never the raw RSI/MACD grid
+
+
+# ------------------------------------------- regression: real payloads ----
+# The Trade Ideas page 500'd in production because plain.py read
+# "n_observations" while Probability.to_dict() emits "n". Every test here
+# had hand-built its own probability dict, so none of them noticed.
+# These build the dict from the real object instead.
+def _real_prob(available=True, value=0.56, n=1234):
+    from app.analytics.probability import Probability
+    return Probability(available, value if available else None, n).to_dict()
+
+
+def test_instruction_accepts_the_real_probability_payload():
+    p = instruction(_cand(probability=_real_prob()),
+                    strategy_is_profitable=True)
+    assert "56%" in p.confidence
+    assert "1,234" in p.confidence
+
+
+def test_instruction_accepts_a_real_insufficient_payload():
+    p = instruction(_cand(probability=_real_prob(available=False, n=12)),
+                    strategy_is_profitable=True)
+    assert "%" not in p.confidence
+    assert "200 past cases" in p.confidence
+
+
+def test_a_missing_sample_size_does_not_crash_the_page():
+    """Defensive: a bad count must degrade the wording, not 500."""
+    bad = _real_prob()
+    bad["n"] = None
+    p = instruction(_cand(probability=bad), strategy_is_profitable=True)
+    assert "unknown number" in p.confidence
+
+
+def test_probability_evidence_survives_a_missing_count():
+    from app.analytics.probability import Probability
+    assert "unrecorded" in Probability(True, 0.5, None).evidence
+    assert Probability(False, None, None).evidence.startswith("only 0")
+
+
+def test_recommendations_endpoint_does_not_500_with_calibration(real_names):
+    """End-to-end: the exact failure the user hit, in one assertion."""
+    from app.analytics.probability import persist_calibration
+    import pandas as pd
+
+    from app.analytics.probability import MODEL_VERSION
+
+    c, app, days = real_names
+    # A full, usable calibration table covering the whole score range -
+    # the state the user's machine was in when the page 500'd. The buckets
+    # must match what Calibrator queries for, or this test proves nothing.
+    rows = []
+    for b in range(10):
+        rows.append({"model_version": MODEL_VERSION, "horizon_days": 1,
+                     "bucket": b, "score_lo": -5 + b, "score_hi": -4 + b,
+                     "n_observations": 900, "n_positive": 470,
+                     "hit_rate": 0.52, "mean_return": 0.001,
+                     "fold": "walkforward"})
+    persist_calibration(app.config["DB"], pd.DataFrame(rows))
+
+    r = c.get("/api/recommendations")
+    assert r.status_code == 200, r.data[:400]
+    body = r.get_json()
+    cands = body.get("long", []) + body.get("short", [])
+    assert cands, "no candidates - this test would prove nothing"
+
+    quoted = [x for x in cands if x["probability"]["available"]]
+    assert quoted, "no probability was usable - the crash path is untested"
+    for x in quoted:
+        assert "%" in x["plain"]["confidence"]
+        assert "similar cases" in x["plain"]["confidence"]

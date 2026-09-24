@@ -165,11 +165,15 @@ def instruction(c: dict, *, strategy_is_profitable: bool | None = None,
                 f"to avoid taking a loss.")
 
     # ---- confidence ------------------------------------------------------
+    # Probability.to_dict() names the sample size "n"; accept the long
+    # spelling too so a future rename cannot silently blank this out.
     if prob.get("available"):
-        n = prob.get("n_observations")
+        n = prob.get("n", prob.get("n_observations"))
+        shown = prob.get("display") or "an unknown share"
+        count = f"{int(n):,}" if isinstance(n, (int, float)) else "an unknown number of"
         confidence = (
             f"In the past, trades scoring like this one went the right way "
-            f"{prob.get('display')} of the time, out of {n:,} similar cases "
+            f"{shown} of the time, out of {count} similar cases "
             f"the program had never seen before. That is a slight lean, not "
             f"a promise.")
     else:

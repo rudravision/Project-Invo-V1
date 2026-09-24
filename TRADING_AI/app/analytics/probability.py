@@ -58,10 +58,15 @@ class Probability:
 
     @property
     def evidence(self) -> str:
+        # n_observations should always be an int, but a single bad value
+        # must not take down every screen that renders a probability.
+        n = self.n_observations if isinstance(self.n_observations, (int, float)) else None
         if not self.available:
-            return (f"only {self.n_observations} historical observations "
-                    f"(need {MIN_OBSERVATIONS})")
-        return f"based on {self.n_observations:,} historical observations"
+            return (f"only {0 if n is None else int(n)} historical "
+                    f"observations (need {MIN_OBSERVATIONS})")
+        if n is None:
+            return "based on an unrecorded number of historical observations"
+        return f"based on {int(n):,} historical observations"
 
     def to_dict(self) -> dict:
         return {"available": self.available,
