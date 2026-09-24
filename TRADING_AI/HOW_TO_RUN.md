@@ -42,7 +42,18 @@ You should now be looking at files like `TRADING_AI.bat`, `INSTALL.bat`,
 
 ### Step 4. Update your copy — the easy way
 
-Go **back one folder**, to the one named `Project-Invo-V1-arena-...`.
+**Where the file is:** after unzipping you have a folder called
+`Project-Invo-V1-arena-...`. Open it. You will see:
+
+```
+Project-Invo-V1-arena-.../
+├── TRADING_AI/            <- the program files
+├── README.md
+└── UPDATE_MY_COPY.bat     <- THIS ONE, next to the folder
+```
+
+`UPDATE_MY_COPY.bat` sits **beside** the `TRADING_AI` folder, not inside it.
+(There is also a copy inside `TRADING_AI` if you prefer — either works.)
 
 Double-click **`UPDATE_MY_COPY.bat`**.
 
