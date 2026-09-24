@@ -42,7 +42,8 @@ from app.db.database import Database, graceful_shutdown
 from app.db.migrations import migrate
 from app.gui import jobs as jobslib
 from app.gui.pipeline import (build_calibration_job, full_update_job,
-                              repair_job, run_backtest_job)
+                              repair_job, run_backtest_job,
+                              run_robustness_job)
 
 log = logging.getLogger(__name__)
 
@@ -572,6 +573,28 @@ def create_app(root: str | None = None) -> Flask:
         }))
 
     # -------------------------------------------------------------- charts
+    @app.get("/api/robustness")
+    def api_robustness():
+        """The last out-of-sample settings test."""
+        raw = get_setting("last_robustness")
+        if not raw:
+            return jsonify({
+                "available": False,
+                "message": ("No settings test has been run yet. Press TEST "
+                            "SETTINGS below - it checks whether any setting "
+                            "makes money in both halves of your history, "
+                            "instead of just the half it was chosen on.")})
+        # get_setting already decodes JSON values, but older rows may still
+        # be plain strings - accept both rather than 500.
+        if isinstance(raw, dict):
+            return jsonify(raw)
+        try:
+            return jsonify(json.loads(raw))
+        except (TypeError, ValueError):
+            return jsonify({"available": False,
+                            "message": "The last settings test is unreadable. "
+                                       "Run it again."})
+
     @app.get("/api/confirmations")
     def api_confirmations():
         """What each confirmation check is actually worth, measured."""
@@ -749,6 +772,10 @@ def create_app(root: str | None = None) -> Flask:
                 job = manager.start(
                     "Backtest",
                     lambda j: run_backtest_job(j, db, settings, body))
+            elif action == "robustness":
+                job = manager.start(
+                    "Robustness Test",
+                    lambda j: run_robustness_job(j, db, settings, body))
             elif action == "calibrate":
                 job = manager.start(
                     "Build Probability Calibration",

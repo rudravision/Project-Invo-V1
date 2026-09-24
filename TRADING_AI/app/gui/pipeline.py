@@ -23,6 +23,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from app.backtest.robustness import (DEFAULT_GRID, conclusion, cost_hurdle,
+                                     sweep)
 from app.analytics.confirmations import evaluate_checks
 from app.analytics.indicators import add_indicator_set
 from app.analytics.indices import pick_row, sector_label
@@ -500,4 +502,62 @@ def measure_confirmations(db, daily: pd.DataFrame, sectors: dict,
                      None if pd.isna(r.hit_fail_pct) else float(r.hit_fail_pct),
                      None if pd.isna(r.edge_pct) else float(r.edge_pct),
                      r.verdict))
+    return out
+
+
+# --------------------------------------------------------------------------- #
+def run_robustness_job(job, db, settings, body: dict) -> dict:
+    """Test several settings and check whether any survives out-of-sample.
+
+    This deliberately does not hand back a single "best" setting to apply.
+    A sweep always produces a winner, even on random data, so the output is
+    framed as evidence about consistency - including the answer "none of
+    these work", which is the honest result for a strategy that loses money
+    after costs.
+    """
+    cb = progress_adapter(job)
+    stop = should_stop(job)
+    daily, _, _, _ = _load(db)
+    if daily.empty:
+        raise ValueError("There is no real market data to test.")
+
+    warmup = int(body.get("warmup", 130))
+    capital = float(body.get("capital", 1_000_000))
+    job.total = len(DEFAULT_GRID) + 1
+    done = {"n": 0}
+
+    def tick(msg):
+        done["n"] += 1
+        cb(msg, min(done["n"], job.total - 1), job.total)
+        if stop():
+            raise InterruptedError("Stopped by the user.")
+
+    table = sweep(daily, warmup=warmup, capital=capital, progress=tick)
+    if table.empty:
+        return {"available": False,
+                "message": ("Not enough history to test settings yet. "
+                            "Download more data first.")}
+
+    concl = conclusion(table)
+    hurdles = {int(s.rebalance_days): cost_hurdle(rebalance_days=s.rebalance_days)
+               for s in DEFAULT_GRID}
+
+    out = {"available": True,
+           "rows": table.to_dict("records"),
+           "conclusion": concl,
+           "cost_hurdles": hurdles,
+           "built_at": dt.datetime.now().isoformat(timespec="seconds")}
+
+    rdir = settings.root / "reports"
+    rdir.mkdir(parents=True, exist_ok=True)
+    stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    (rdir / f"robustness_{stamp}.json").write_text(
+        json.dumps(out, indent=2, default=str), encoding="utf-8")
+
+    with db.tx() as conn:
+        conn.execute("INSERT OR REPLACE INTO app_settings (key,value)"
+                     " VALUES ('last_robustness', ?)",
+                     (json.dumps(out, default=str),))
+
+    cb("Done.", job.total, job.total)
     return out

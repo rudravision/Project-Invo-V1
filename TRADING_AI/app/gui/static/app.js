@@ -553,6 +553,7 @@
     api("/api/backtest/latest").then(function (b) {
       if (!b.available) {
         $("#btResult").innerHTML = "<div class='empty'>" + esc(b.message) + "</div>";
+        loadRobustness();
         return;
       }
       var order = ["period", "trading_days", "rebalances", "trades",
@@ -606,7 +607,57 @@
       }
       $("#btResult").innerHTML = h;
       window.drawEquity($("#cEquity"), b.equity || []);
+      loadRobustness();
     }).catch(function (e) { toast(e.message, "err"); });
+  }
+
+  function loadRobustness() {
+    api("/api/robustness").then(function (d) {
+      if (!d.available) {
+        $("#robResult").innerHTML = "<div class='empty'>" +
+          esc(d.message) + "</div>";
+        return;
+      }
+      var c = d.conclusion || {};
+      var h = "<div class='banner " + (c.ok ? "good" : "warn") + "'><h4>" +
+        esc(c.headline || "") + "</h4><p>" + esc(c.detail || "") + "</p></div>";
+
+      h += "<table class='tbl'><thead><tr><th>Setting</th><th>Trades</th>" +
+        "<th>Costs</th><th>First half</th><th>Second half</th>" +
+        "<th>Worst fall</th><th>Verdict</th></tr></thead><tbody>";
+      (d.rows || []).forEach(function (r) {
+        var a = r.first_half_return_pct, b = r.second_half_return_pct;
+        h += "<tr><td>" + esc(r.label) + "</td>" +
+          "<td>" + r.trades + "</td>" +
+          "<td>" + Number(r.cost_drag_pct).toFixed(1) + "%</td>" +
+          "<td class='" + (a > 0 ? "up" : "down") + "'>" +
+            (a > 0 ? "+" : "") + Number(a).toFixed(1) + "%</td>" +
+          "<td class='" + (b > 0 ? "up" : "down") + "'>" +
+            (b > 0 ? "+" : "") + Number(b).toFixed(1) + "%</td>" +
+          "<td>" + Number(r.max_dd_pct).toFixed(1) + "%</td>" +
+          "<td>" + esc(r.verdict) + "</td></tr>";
+      });
+      h += "</tbody></table>";
+
+      var hurdles = d.cost_hurdles || {};
+      var keys = Object.keys(hurdles);
+      if (keys.length) {
+        h += "<h4>What costs alone take, before any profit</h4>" +
+          "<table class='tbl'><thead><tr><th>Rebalance</th>" +
+          "<th>Round trips a year</th><th>Cost per year</th></tr></thead>" +
+          "<tbody>";
+        keys.sort(function (x, y) { return x - y; }).forEach(function (k) {
+          var v = hurdles[k];
+          h += "<tr><td>every " + esc(k) + " days</td><td>" +
+            v.round_trips_per_year + "</td><td class='down'>" +
+            Number(v.annual_cost_pct).toFixed(1) + "%</td></tr>";
+        });
+        h += "</tbody></table><p class='muted small'>Trading more often " +
+          "multiplies the same per-trade cost. This is usually the single " +
+          "biggest drag on a short-horizon strategy.</p>";
+      }
+      $("#robResult").innerHTML = h;
+    }).catch(function () { });
   }
 
   /* --------------------------------------------------------- sources */

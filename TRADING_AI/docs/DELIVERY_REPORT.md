@@ -201,33 +201,112 @@ only the new days.
 
 ## 7. BACKTEST RESULTS
 
-**Engine verified; numbers below are from synthetic data and are meaningless
-as market results.** No NSE endpoint is reachable from my sandbox, so I have
-no real prices here. Reporting synthetic output as if it were real
-performance is exactly what you told me not to do. Run it on your machine
-after a real download to get real figures — the Backtest page will label
-results from practice data with a red banner.
+### 7a. Your first real run — and what it said
 
-What the engine does, verified by the run:
+On 24 Sep 2026 you ran the backtest on your own downloaded data. The result:
 
 ```
-Period              2023-03-27 to 2026-09-24   (914 sessions, walk-forward)
-Rebalances          183
-Round trips         327
-Trades              759
-Costs modelled      brokerage 0.03% capped at Rs 20, STT 0.1% on sell,
-                    exchange charges, GST 18%, stamp duty, 10 bps slippage/side
-Total costs         reported explicitly, as a % drag on return
-Benchmark           NIFTY 50 comparison included
-Reported            win rate, avg win/loss, profit factor, expectancy,
-                    max drawdown, Sharpe, Sortino, CAGR, total return,
-                    annualised volatility, cost drag, excess vs benchmark
+Period            2024-07-15 to 2026-09-23   (538 sessions, walk-forward)
+Trades            538          Rebalances   108
+Initial capital   Rs 10,00,000
+Final equity      Rs  8,47,653
+Total return      -15.23%      CAGR         -7.27%
+Sharpe            -0.10        Sortino      -0.11
+Max drawdown      -39.44%      Win rate     49.59%
+Avg win           +6.30%       Avg loss     -5.97%
+Profit factor      1.04 (BEFORE costs)
+Total costs       Rs 1,43,637  Cost drag    14.36% of capital
+```
+
+**Read plainly: the strategy lost money.** Profit factor 1.04 means the
+winners barely outweighed the losers on raw price movement; costs then
+consumed the lot. That is not a data problem, it is the strategy.
+
+Two faults in the tool distorted that run, both since fixed:
+
+* the backtest loaded **raw prices with no quarantine**, so the unadjusted
+  stock splits were traded as genuine 50-70% overnight crashes (the cliff
+  visible in the equity curve);
+* **profit factor was unlabelled**, so a figure measured before costs sat
+  next to a return measured after them.
+
+### 7b. Why frequent trading could not have worked
+
+Costs are charged per round trip, so they scale with how often you trade.
+Straight arithmetic from the same cost model the backtest uses:
+
+| Rebalance | Round trips/year | Cost per year |
+|---|---|---|
+| every 5 days | 50 | **17.5%** |
+| every 10 days | 25 | 8.7% |
+| every 21 days | 12 | 4.2% |
+| every 63 days | 4 | 1.4% |
+
+At weekly rebalancing the strategy must earn **more than 17% a year before
+you see a rupee**. The observed -15.2% with a 14.4% cost drag is consistent
+with that arithmetic.
+
+### 7c. Settings testing (TEST SETTINGS button)
+
+`app/backtest/robustness.py` runs a small grid of settings and scores the
+**first half** of history (what you would have seen when choosing) against
+the **second half** (what you would then have earned). A sweep always
+produces a winner - even on random data - so a single "best" number is never
+reported. `conclusion()` is written to be able to say *no setting works*.
+
+Verified on the 120-stock test fixture (`tests/tools/make_repro_db.py`) -
+**synthetic prices, not a market result**:
+
+```
+setting                      trades  cost drag  1st half  2nd half  verdict
+rebalance every 5d,  top 5      408     12.8%     -0.9%    +10.4%  only later half
+rebalance every 10d, top 5      224      7.7%    +12.0%     +9.8%  positive in both
+rebalance every 21d, top 5      127      4.5%     +7.8%     +2.8%  positive in both
+rebalance every 21d, top 3       81      3.8%    +10.1%     +2.6%  much weaker
+rebalance every 63d, top 5       45      1.7%    +20.5%    +10.0%  positive in both
+```
+
+The return figures are meaningless (random-walk fixture). The **cost column
+is real arithmetic**: 408 trades cost 12.8% of capital, 45 trades cost 1.7%.
+
+### 7d. Engine guarantees
+
+```
+Costs modelled    brokerage 0.03% capped at Rs 20, STT 0.1% on sell,
+                  exchange charges, GST 18%, stamp duty, 10 bps slippage/side
+Reported          win rate, avg win/loss, profit factor (pre-cost, labelled),
+                  expectancy, max drawdown, worst single day, Sharpe, Sortino,
+                  CAGR, total return, volatility, cost drag, excess vs benchmark
+Excluded stocks   listed by name on the results page
 ```
 
 **Look-ahead and survivorship:** entries are taken at the **next session's
 open** from a ranking computed on the **previous close**. The calibration
 engine slices history to `date <= as_of` before the scoring function ever
 sees it, and a test asserts the scorer is never handed future data.
+
+---
+
+## 7e. CONFIRMATION CHECKS — AND WHETHER THEY HELP
+
+Ten named checks appear on every trade card: volume surge, volume trend,
+delivery %, trend, momentum, not-overextended, sector, market, liquidity and
+recent company announcements. Each states the actual number behind it.
+
+Three rules they obey:
+
+1. **They never change the probability.** The probability remains the
+   measured out-of-sample hit rate and nothing else. A test enforces it.
+2. **Missing data reports UNKNOWN, never a pass.** No delivery download
+   means "unknown", not "confirmed".
+3. **News is flagged, not scored.** Announcements are counted so you can
+   read them. No bullish/bearish sentiment number is invented.
+
+`Rebuild Calibration` also measures every check against what price actually
+did next - hit rate when it passed vs when it failed, with observation
+counts - and the Trade Ideas page shows that table. On the random-walk
+fixture the harness correctly reports **no edge**; a planted edge is
+correctly found. Both are tested.
 
 ---
 
@@ -258,7 +337,10 @@ environment. So:
 - ✅ Tested: all logic, the repair pass, calendar handling, gap
   classification, corporate actions, calibration, sizing, every API endpoint,
   job progress and cancellation, settings persistence across restart, backup
-  and restore, the safety gate. 120 automated tests pass.
+  and restore, the safety gate, index-name handling against the real
+  mixed-case NSE spellings, corporate-action quarantine, the confirmation
+  checks and their measurement harness, and out-of-sample settings testing.
+  **230 automated tests pass.**
 - ✅ Tested against a **stub NSE server** that observes holidays, returns 404
   on closed days and fails transiently: incremental download, resume, retry.
 - ❌ Not tested: the real NSE endpoints, actual download volumes and timings,
@@ -282,8 +364,22 @@ environment. So:
 - Upstox v2 candle endpoints are deprecated; v3 is the target. Whether v3
   intraday needs a Bearer token must be verified empirically with your
   credentials — the docs are inconsistent and I will not assume.
-- Backtest results with trading costs are highly sensitive to the rebalance
-  frequency. The default 5-day rebalance already carries a visible cost drag.
+- **The strategy as delivered does not make money on your data.** Your own
+  run returned -15.23% after costs. Cleaning the data removes a distortion;
+  it does not create an edge. Do not trade this until a setting shows a
+  positive result in *both* halves of the settings test, and treat even that
+  as weak evidence.
+- Backtest results are highly sensitive to rebalance frequency because costs
+  scale with turnover: ~17.5% a year at 5-day holds versus ~1.4% at 63-day
+  holds. Any short-horizon strategy must clear that hurdle first.
+- The settings test splits one history in two. Two halves of under three
+  years is a **small sample**. A setting that survives it is worth more
+  attention than one that does not - it is not proof.
+- Delivery % and company announcements are only as good as what has been
+  downloaded. Until they are, those confirmation checks report UNKNOWN
+  rather than passing by default.
+- `UPDATE_MY_COPY.bat` has been reviewed and its copy behaviour simulated,
+  but it has not been executed on Windows from here.
 
 **This is a research and decision-support tool. It is not a guaranteed-profit
 machine, and it will be wrong regularly.**

@@ -168,6 +168,16 @@
       <button class="btn" data-run="backtest">RUN BACKTEST</button>
       <div id="btResult"></div>
       <canvas id="cEquity" height="260"></canvas>
+
+      <h3>DOES ANY SETTING SURVIVE OUT-OF-SAMPLE?</h3>
+      <p class="note">A sweep of settings always produces a winner, even on
+        random data, because you are picking the luckiest of many tries. So
+        each setting is scored on the <b>first half</b> of your history (what
+        you would have seen when choosing it) and the <b>second half</b>
+        (what you would then have actually earned). A setting that is strong
+        in the first and weak in the second was fitted, not found.</p>
+      <button class="btn" data-run="robustness">TEST SETTINGS</button>
+      <div id="robResult"></div>
     </section>
 
     <!-- =================================================== SOURCES -->
