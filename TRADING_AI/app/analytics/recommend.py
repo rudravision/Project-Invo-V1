@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from .confirmations import run_checks, summarise
 from .indicators import add_indicator_set
 from .probability import Calibrator, Probability, INSUFFICIENT
 
@@ -78,6 +79,8 @@ class Candidate:
     market_alignment: str
     score: float
     rank: int
+    confirmations: list = dataclasses.field(default_factory=list)
+    confirmation_summary: dict = dataclasses.field(default_factory=dict)
     notes: str = ""
 
     def to_dict(self) -> dict:
@@ -171,6 +174,7 @@ def generate_candidates(daily: pd.DataFrame, ranked: pd.DataFrame,
                         rs: RiskSettings,
                         calibrator: Calibrator | None = None,
                         delivery: dict[str, float] | None = None,
+                        announcements: dict[str, int] | None = None,
                         top_n: int = 5) -> dict[str, list[Candidate]]:
     """Build LONG and SHORT candidate lists with levels and sizing."""
     if ranked is None or ranked.empty:
@@ -259,6 +263,25 @@ def generate_candidates(daily: pd.DataFrame, ranked: pd.DataFrame,
                     if f.get("adv20") else None
                 vol_chg = ((relvol - 1) * 100) if relvol else None
 
+            # Independent confirmation checks. They are reported alongside
+            # the probability, never folded into it - the probability stays
+            # the measured out-of-sample hit rate and nothing else.
+            crow = {
+                "relative_volume": relvol,
+                "vol_z": f.get("vol_z"),
+                "delivery_pct": delivery.get(r.symbol),
+                "above_sma50": f.get("above_sma50"),
+                "above_sma200": f.get("above_sma200"),
+                "macd_hist": f.get("macd_hist"),
+                "rsi14": f.get("rsi14"),
+                "turnover20": f.get("turnover20"),
+                "sector_strength": _sector_strength(sector, sector_ranks),
+                "market_alignment": align,
+                "announcements_7d": (announcements.get(r.symbol)
+                                     if announcements is not None else None),
+            }
+            checks = run_checks(crow, side)
+
             bucket.append(Candidate(
                 symbol=r.symbol, sector=sector, side=side, signal=sig,
                 last_price=round(price, 2), entry=round(entry, 2),
@@ -282,6 +305,8 @@ def generate_candidates(daily: pd.DataFrame, ranked: pd.DataFrame,
                 delivery_pct=delivery.get(r.symbol),
                 sector_strength=_sector_strength(sector, sector_ranks),
                 market_alignment=align, score=round(score, 3), rank=rank_i,
+                confirmations=[c.to_dict() for c in checks],
+                confirmation_summary=summarise(checks),
             ))
     return out
 

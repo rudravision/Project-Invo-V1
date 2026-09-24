@@ -172,3 +172,21 @@ pre{background:#0a0d13;border:1px solid var(--line);border-radius:6px;padding:12
   padding:20px;max-width:840px;max-height:82vh;overflow:auto}
 .empty{color:var(--dim2);font-size:13px;padding:22px;text-align:center;
   background:var(--bg2);border:1px dashed var(--line);border-radius:8px}
+
+/* ---- confirmation checks on a trade card ---- */
+.confirms{margin:10px 12px 12px;border-top:1px solid #21283a;padding-top:8px}
+.confirms summary{cursor:pointer;font-size:12px;color:#9fb0c9;
+  list-style:none;padding:4px 0}
+.confirms summary::-webkit-details-marker{display:none}
+.confirms summary:before{content:"\25B8  ";color:#5b6b85}
+.confirms[open] summary:before{content:"\25BE  "}
+.confirms ul{list-style:none;margin:6px 0 0;padding:0}
+.chk{display:grid;grid-template-columns:18px 170px 1fr;gap:6px;
+  align-items:baseline;padding:3px 0;font-size:12px}
+.chk .ic{font-weight:700}
+.chk .lb{color:#c7d3e6}
+.chk .dt{color:#8b9ab2}
+.chk.pass .ic{color:#3fb96b}
+.chk.fail .ic{color:#d2544f}
+.chk.unknown .ic{color:#7a869a}
+.chk.unknown .lb{color:#8b9ab2}

@@ -42,7 +42,9 @@ def add_bars(db, symbol, dates, price=100.0):
 def test_migrations_are_idempotent(tmp_path):
     d = Database(tmp_path / "m.sqlite")
     r1 = migrate(d, tmp_path / "bk")
-    assert len(r1["applied"]) == 2
+    # every migration defined in the module must run on a fresh database
+    from app.db.migrations import MIGRATIONS
+    assert r1["applied"] == [name for name, _ in MIGRATIONS]
     r2 = migrate(d, tmp_path / "bk")
     assert r2["applied"] == []
     assert pending(d) == []

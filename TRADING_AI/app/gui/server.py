@@ -131,6 +131,35 @@ def app_version() -> str:
         return "unknown"
 
 
+def _recent_announcements(db, sessions: int = 7) -> dict[str, int] | None:
+    """How many company announcements each stock has had recently.
+
+    Returned as a count, deliberately. We flag that news exists so it can be
+    read; we do not score whether it is good or bad news, because turning
+    headlines into a bullish/bearish number would be inventing data.
+
+    None means the announcements feed has never been downloaded, which the
+    check reports as UNKNOWN rather than as "no news".
+    """
+    conn = db.connect()
+    try:
+        try:
+            total = conn.execute("SELECT COUNT(*) FROM announcements"
+                                 ).fetchone()[0]
+        except Exception:  # noqa: BLE001
+            return None
+        if not total:
+            return None
+        cutoff = (dt.date.today() - dt.timedelta(days=sessions * 2)).isoformat()
+        rows = conn.execute(
+            "SELECT symbol, COUNT(*) n FROM announcements"
+            " WHERE symbol IS NOT NULL AND published_at >= ?"
+            " GROUP BY symbol", (cutoff,)).fetchall()
+    finally:
+        conn.close()
+    return {r["symbol"]: int(r["n"]) for r in rows}
+
+
 def _quarantine_note(q: dict) -> dict:
     """Describe the excluded stocks in words the user can act on."""
     return {"count": len(q), "symbols": sorted(q), "reasons": q,
@@ -528,7 +557,8 @@ def create_app(root: str | None = None) -> Flask:
         cands = generate_candidates(
             daily, ranked, sectors=sectors, sector_ranks=sector_ranks,
             market_trend=market_trend, rs=rs, calibrator=cal,
-            delivery=deliv, top_n=5)
+            delivery=deliv, announcements=_recent_announcements(db),
+            top_n=5)
 
         return jsonify(_clean({
             "blocked": False,
@@ -542,6 +572,39 @@ def create_app(root: str | None = None) -> Flask:
         }))
 
     # -------------------------------------------------------------- charts
+    @app.get("/api/confirmations")
+    def api_confirmations():
+        """What each confirmation check is actually worth, measured."""
+        conn = db.connect()
+        try:
+            try:
+                rows = conn.execute(
+                    "SELECT * FROM confirmation_stats ORDER BY side,"
+                    " edge_pct DESC").fetchall()
+            except Exception:  # noqa: BLE001
+                rows = []
+        finally:
+            conn.close()
+        if not rows:
+            return jsonify({
+                "available": False,
+                "message": ("The confirmation checks have not been measured "
+                            "yet. Press Rebuild Calibration on the "
+                            "dashboard - it measures them as it runs.")})
+        out = {"LONG": [], "SHORT": []}
+        for r in rows:
+            out.setdefault(r["side"], []).append(dict(r))
+        helps = [r for r in rows if r["verdict"] == "Helps"]
+        return jsonify({
+            "available": True, "sides": out,
+            "built_at": rows[0]["built_at"],
+            "summary": (f"{len(helps)} of {len(rows)} check-and-direction "
+                        f"combinations show a measurable edge."),
+            "note": ("Edge is the difference in how often price moved your "
+                     "way when the check passed versus when it failed. A "
+                     "check with no measurable edge is not helping you, "
+                     "however sensible it sounds.")})
+
     @app.get("/api/symbols")
     def api_symbols():
         """Every stock we hold prices for, for the chart picker."""

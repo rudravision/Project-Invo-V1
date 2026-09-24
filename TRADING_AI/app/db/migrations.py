@@ -167,9 +167,30 @@ CREATE TABLE IF NOT EXISTS model_runs (
 );
 """
 
+
+# Measured value of each confirmation check. A check is kept because this
+# table says it helps out-of-sample, not because it sounds sensible.
+M003 = """
+CREATE TABLE IF NOT EXISTS confirmation_stats (
+    check_key     TEXT NOT NULL,
+    label         TEXT,
+    side          TEXT NOT NULL,
+    horizon_days  INTEGER NOT NULL,
+    n_pass        INTEGER NOT NULL,
+    n_fail        INTEGER NOT NULL,
+    hit_pass_pct  REAL,
+    hit_fail_pct  REAL,
+    edge_pct      REAL,
+    verdict       TEXT,
+    built_at      TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (check_key, side, horizon_days)
+);
+"""
+
 MIGRATIONS: list[tuple[str, str]] = [
     ("001_sessions_lifecycle_gaps", M001),
     ("002_settings_calibration", M002),
+    ("003_confirmation_stats", M003),
 ]
 
 

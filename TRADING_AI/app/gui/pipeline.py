@@ -23,6 +23,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from app.analytics.confirmations import evaluate_checks
+from app.analytics.indicators import add_indicator_set
 from app.analytics.indices import pick_row, sector_label
 from app.data.frames import exclusion_note, load_daily
 from app.analytics.probability import (Calibrator, build_calibration,
@@ -339,9 +341,9 @@ def run_backtest_job(job, db, settings, body: dict) -> dict:
 def build_calibration_job(job, db, settings) -> dict:
     """Walk-forward calibration of score -> observed hit rate."""
     cb = progress_adapter(job)
-    job.total = 3
-    cb("Loading history...", 0, 3)
-    daily, _, sectors, _ = _load(db)
+    job.total = 4
+    cb("Loading history...", 0, 4)
+    daily, idx, sectors, _ = _load(db)
     if daily.empty:
         raise ValueError("No real market data to calibrate against.")
 
@@ -351,18 +353,151 @@ def build_calibration_job(job, db, settings) -> dict:
         r = rank_stocks(hist, cfg, as_of=as_of, sectors=sectors)
         return r[["symbol", "score"]] if len(r) else None
 
-    cb("Running walk-forward folds...", 1, 3)
+    cb("Running walk-forward folds...", 1, 4)
     cal = build_calibration(daily, score_fn,
-                            progress=lambda m: cb(m, 1, 3))
+                            progress=lambda m: cb(m, 1, 4))
     if cal.empty:
         return {"built": False,
                 "message": ("Not enough history yet to calibrate honestly. "
                             "Download more data and try again. Until then "
                             "probabilities will show 'Insufficient data'.")}
 
-    cb("Saving calibration...", 2, 3)
+    cb("Saving calibration...", 2, 4)
     n = persist_calibration(db, cal)
     summary = Calibrator(db).summary()
-    cb("Calibration complete.", 3, 3)
+
+    # Measure whether each confirmation check is worth anything. This is the
+    # part that stops "add more confirmations" from becoming superstition:
+    # a check earns its place by improving the next-session hit rate on a
+    # large sample, or it is reported as having no measurable effect.
+    cb("Measuring the confirmation checks...", 3, 4)
+    conf = {}
+    try:
+        conf = measure_confirmations(db, daily, sectors, idx=idx)
+    except Exception as e:  # noqa: BLE001
+        conf = {"error": f"Could not measure the checks: {e}"}
+
+    cb("Calibration complete.", 4, 4)
     return {"built": True, "buckets": n, "summary": summary,
-            "table": cal.to_dict("records")}
+            "confirmations": conf, "table": cal.to_dict("records")}
+
+
+def _market_trend_by_date(idx: pd.DataFrame) -> pd.Series:
+    """Bullish/Bearish per date, from NIFTY 50 against its 50-day average.
+
+    Computed only from data available on that date, so the evaluation
+    cannot see the future.
+    """
+    if idx is None or idx.empty:
+        return pd.Series(dtype=object)
+    from app.analytics.indices import is_nifty50
+    n = idx[idx["index_name"].map(is_nifty50)].copy()
+    if n.empty:
+        return pd.Series(dtype=object)
+    n["date"] = pd.to_datetime(n["date"])
+    n = n.sort_values("date")
+    sma = n["close"].rolling(50, min_periods=20).mean()
+    lab = pd.Series("Unknown", index=n.index, dtype=object)
+    lab[n["close"] > sma] = "Bullish"
+    lab[n["close"] <= sma] = "Bearish"
+    lab[sma.isna()] = "Unknown"
+    return pd.Series(lab.values, index=n["date"].values)
+
+
+def _sector_strength_by_date(idx: pd.DataFrame) -> dict:
+    """For each date, each sector's momentum rank turned into a label."""
+    if idx is None or idx.empty:
+        return {}
+    from app.analytics.indices import sector_label
+    d = idx.copy()
+    d["date"] = pd.to_datetime(d["date"])
+    d["sector"] = d["index_name"].map(sector_label)
+    d = d[d["sector"].notna()]
+    if d.empty:
+        return {}
+    d = d.sort_values(["sector", "date"])
+    d["ret21"] = d.groupby("sector")["close"].pct_change(21)
+    d = d.dropna(subset=["ret21"])
+    if d.empty:
+        return {}
+    d["pct"] = d.groupby("date")["ret21"].rank(pct=True)
+
+    def lab(p):
+        return ("Strong" if p >= 0.8 else "Firm" if p >= 0.6 else
+                "Neutral" if p >= 0.4 else "Weak" if p >= 0.2 else
+                "Very weak")
+
+    d["label"] = d["pct"].map(lab)
+    return {(r.date, r.sector): r.label for r in d.itertuples()}
+
+
+def _delivery_by_symbol_date(db) -> dict:
+    conn = db.connect()
+    try:
+        try:
+            rows = conn.execute(
+                "SELECT symbol, date, delivery_pct FROM delivery"
+            ).fetchall()
+        except Exception:  # noqa: BLE001
+            return {}
+    finally:
+        conn.close()
+    return {(r["symbol"], str(r["date"])[:10]): r["delivery_pct"]
+            for r in rows if r["delivery_pct"] is not None}
+
+
+def measure_confirmations(db, daily: pd.DataFrame, sectors: dict,
+                          idx: pd.DataFrame | None = None,
+                          horizon: int = 1) -> dict:
+    """Build the evidence table for every confirmation check.
+
+    Every row of history is scored with the same checks the trade cards
+    use, then compared against what price actually did next. Nothing here
+    is fitted - it is a straight count of what happened.
+    """
+    d = daily.copy()
+    d["date"] = pd.to_datetime(d["date"])
+    mkt = _market_trend_by_date(idx)
+    sect = _sector_strength_by_date(idx)
+    deliv = _delivery_by_symbol_date(db)
+
+    frames = []
+    for sym, g in d.groupby("symbol"):
+        if len(g) < 220:
+            continue
+        f = add_indicator_set(g)
+        f["relative_volume"] = f["volume"] / f["adv20"]
+        sec = sectors.get(sym, "Unknown")
+        f["market_trend"] = (f["date"].map(mkt).fillna("Unknown")
+                             if len(mkt) else "Unknown")
+        f["market_alignment"] = "Unknown"
+        f["sector_strength"] = [sect.get((dd, sec), "Unknown")
+                                for dd in f["date"]] if sect else "Unknown"
+        f["delivery_pct"] = ([deliv.get((sym, dd.strftime("%Y-%m-%d")))
+                              for dd in f["date"]] if deliv else None)
+        f["announcements_7d"] = None
+        f["fwd_ret"] = f["close"].shift(-horizon) / f["close"] - 1
+        frames.append(f.dropna(subset=["fwd_ret"]))
+    if not frames:
+        return {"available": False,
+                "message": "Not enough history to measure the checks yet."}
+
+    feat = pd.concat(frames, ignore_index=True)
+    out = {"available": True, "rows": int(len(feat)), "sides": {}}
+    with db.tx() as conn:
+        for side in ("LONG", "SHORT"):
+            tbl = evaluate_checks(feat, side=side, horizon=horizon)
+            out["sides"][side] = tbl.to_dict("records")
+            for r in tbl.itertuples():
+                conn.execute(
+                    "INSERT OR REPLACE INTO confirmation_stats"
+                    " (check_key,label,side,horizon_days,n_pass,n_fail,"
+                    "  hit_pass_pct,hit_fail_pct,edge_pct,verdict,built_at)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'))",
+                    (r.check, r.label, side, horizon, int(r.n_pass),
+                     int(r.n_fail),
+                     None if pd.isna(r.hit_pass_pct) else float(r.hit_pass_pct),
+                     None if pd.isna(r.hit_fail_pct) else float(r.hit_fail_pct),
+                     None if pd.isna(r.edge_pct) else float(r.edge_pct),
+                     r.verdict))
+    return out

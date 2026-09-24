@@ -340,6 +340,7 @@
       $("#r-pos").value = v.max_positions; $("#r-daily").value = v.max_daily_loss_pct;
       $("#r-dir").value = v.direction; $("#r-stop").value = v.stop_method;
     });
+    loadConfirmationEvidence();
     api("/api/recommendations").then(function (d) {
       if (d.blocked) {
         $("#tradeBlocked").innerHTML = "<div class='banner error'>" +
@@ -414,8 +415,69 @@
       cell("Delivery %", c.delivery_pct === null || c.delivery_pct === undefined
         ? "-" : Number(c.delivery_pct).toFixed(1) + "%") +
       cell("Score", c.score) +
-      "</div></div>";
+      "</div>" + confirmHtml(c) + "</div>";
   }
+
+  // Confirmation checks. Shown as evidence you can read, never folded into
+  // the probability number.
+  function confirmHtml(c) {
+    var list = c.confirmations || [];
+    if (!list.length) return "";
+    var s = c.confirmation_summary || {};
+    var icon = { PASS: "✓", FAIL: "✗", UNKNOWN: "?" };
+    var rows = list.map(function (k) {
+      return "<li class='chk " + k.status.toLowerCase() + "'>" +
+        "<span class='ic'>" + icon[k.status] + "</span>" +
+        "<span class='lb'>" + esc(k.label) + "</span>" +
+        "<span class='dt'>" + esc(k.detail) + "</span></li>";
+    }).join("");
+    return "<details class='confirms'><summary>" +
+      esc(s.text || "Confirmation checks") +
+      (s.failed_labels && s.failed_labels.length
+        ? " — missing: " + esc(s.failed_labels.join(", ")) : "") +
+      "</summary><ul>" + rows + "</ul>" +
+      "<p class='muted small'>These checks are shown as evidence. They do " +
+      "not change the probability above, which comes only from measured " +
+      "out-of-sample results.</p></details>";
+  }
+  function loadConfirmationEvidence() {
+    api("/api/confirmations").then(function (d) {
+      if (!d.available) {
+        $("#confEvidence").innerHTML = "<div class='empty'>" +
+          esc(d.message) + "</div>";
+        return;
+      }
+      var h = "<p class='muted small'>" + esc(d.summary) + " Measured " +
+        esc(String(d.built_at || "")) + ".</p>";
+      ["LONG", "SHORT"].forEach(function (side) {
+        var rows = (d.sides || {})[side] || [];
+        if (!rows.length) return;
+        h += "<h4 class='" + side.toLowerCase() + "'>" + side + "</h4>" +
+          "<table class='tbl'><thead><tr><th>Check</th>" +
+          "<th>Worked when it passed</th><th>When it failed</th>" +
+          "<th>Difference</th><th>Times seen</th><th>Verdict</th>" +
+          "</tr></thead><tbody>";
+        rows.forEach(function (r) {
+          var e = r.edge_pct;
+          var klass = e === null ? "" : (e > 1 ? "up" : e < -1 ? "down" : "");
+          h += "<tr><td>" + esc(r.label) + "</td>" +
+            "<td>" + (r.hit_pass_pct === null ? "—" :
+              Number(r.hit_pass_pct).toFixed(1) + "%") + "</td>" +
+            "<td>" + (r.hit_fail_pct === null ? "—" :
+              Number(r.hit_fail_pct).toFixed(1) + "%") + "</td>" +
+            "<td class='" + klass + "'>" + (e === null ? "—" :
+              (e > 0 ? "+" : "") + Number(e).toFixed(1) + " pts") + "</td>" +
+            "<td>" + Number(r.n_pass).toLocaleString("en-IN") + " / " +
+              Number(r.n_fail).toLocaleString("en-IN") + "</td>" +
+            "<td>" + esc(r.verdict) + "</td></tr>";
+        });
+        h += "</tbody></table>";
+      });
+      h += "<p class='muted small'>" + esc(d.note) + "</p>";
+      $("#confEvidence").innerHTML = h;
+    }).catch(function () { });
+  }
+
   function cell(l, v) {
     return "<div><div class='l'>" + esc(l) + "</div><div class='x'>" + v + "</div></div>";
   }
