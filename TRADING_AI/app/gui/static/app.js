@@ -85,7 +85,7 @@
     if (page === "strategies") loadStrategies();
     if (page === "backtest") loadBacktest();
     if (page === "sources") loadSources();
-    if (page === "settings") loadSettings();
+    if (page === "settings") { loadSettings(); checkUpdate(); }
     if (page === "telegram") loadTelegram();
     if (page === "backups") loadBackups();
     if (page === "logs") loadLogs("app");
@@ -697,6 +697,28 @@
       window.drawRsi($("#cRsi"), d); window.drawMacd($("#cMacd"), d);
     }
   });
+
+  /* ---------------------------------------------------- program update */
+  function checkUpdate() {
+    $("#updateBox").innerHTML = "<span class='muted'>Checking...</span>";
+    api("/api/update/check").then(function (d) {
+      var tone = d.state === "UPDATE_READY" ? "warn"
+        : d.state === "UP_TO_DATE" ? "good" : "";
+      var h = "<div class='advice " + tone + "'><h4>" +
+        esc(d.message) + "</h4>";
+      if (d.what_to_do) {
+        h += "<p>" + esc(d.what_to_do).replace(/\n/g, "<br>") + "</p>";
+      }
+      h += "</div>";
+      h += "<p class='muted small'>Installed: " + esc(d.installed || "?") +
+        (d.latest ? " &middot; Published: " + esc(d.latest) : "") + "</p>";
+      $("#updateBox").innerHTML = h;
+    }).catch(function (e) {
+      $("#updateBox").innerHTML = "<div class='advice'><p>" +
+        esc(e.message) + "</p></div>";
+    });
+  }
+  if ($("#checkUpdate")) $("#checkUpdate").onclick = checkUpdate;
 
   /* ------------------------------------------------------ strategies */
   function loadStrategies() {

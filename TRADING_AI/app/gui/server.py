@@ -613,6 +613,14 @@ def create_app(root: str | None = None) -> Flask:
         }))
 
     # -------------------------------------------------------------- charts
+    @app.get("/api/update/check")
+    def api_update_check():
+        """Is a newer version published? Never installs anything."""
+        from app.update import check, raw_version_url
+
+        url = get_setting("update_url") or raw_version_url()
+        return jsonify(_clean(check(settings.root, url)))
+
     @app.get("/api/strategies")
     def api_strategies():
         """The six-strategy engine: what each one says today."""
