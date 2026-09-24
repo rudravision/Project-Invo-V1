@@ -254,3 +254,47 @@ def test_plan_lists_index_gaps(db):
     gap = analyse_gaps(db)
     plan = plan_repair(db, gap, dt.date(2026, 9, 1), dt.date(2026, 9, 2))
     assert set(plan.need_index) == set(sessions)
+
+
+# --------------------------------------------------------------------------- #
+# Regression: the queue must not block repairs
+# --------------------------------------------------------------------------- #
+def test_requeue_overrides_a_stale_done_marker(db):
+    """A date marked DONE whose data has vanished must be fetchable again.
+
+    `enqueue` protects DONE rows so downloads stay incremental. That
+    protection also meant a session whose bars were deleted could never be
+    re-downloaded: the queue said 'done' while the database sat empty, and
+    REPAIR DATA silently did nothing.
+    """
+    q = DownloadQueue(db)
+    q.enqueue("cm_bhavcopy", ["2026-01-05"])
+    q.mark("cm_bhavcopy", "2026-01-05", "DONE")
+    assert q.pending("cm_bhavcopy") == []
+
+    # enqueue alone must NOT disturb it - that is the incremental guarantee
+    q.enqueue("cm_bhavcopy", ["2026-01-05"])
+    assert q.pending("cm_bhavcopy") == []
+
+    # requeue is the explicit override
+    assert q.requeue("cm_bhavcopy", ["2026-01-05"]) == 1
+    assert q.pending("cm_bhavcopy") == ["2026-01-05"]
+
+
+def test_requeue_does_not_reset_the_attempt_guard(db):
+    """A hopeless date must still stop being retried forever."""
+    q = DownloadQueue(db)
+    q.enqueue("cm_bhavcopy", ["2026-01-06"])
+    for _ in range(3):
+        q.mark("cm_bhavcopy", "2026-01-06", "FAILED", "boom")
+    assert q.pending("cm_bhavcopy", max_attempts=3) == []
+    q.requeue("cm_bhavcopy", ["2026-01-06"])
+    assert q.pending("cm_bhavcopy", max_attempts=3) == [], \
+        "requeue must not wipe the attempt counter"
+    assert q.reset_failed("cm_bhavcopy") >= 0
+
+
+def test_requeue_ignores_unknown_keys(db):
+    q = DownloadQueue(db)
+    assert q.requeue("cm_bhavcopy", []) == 0
+    assert q.requeue("cm_bhavcopy", ["1999-01-01"]) == 0

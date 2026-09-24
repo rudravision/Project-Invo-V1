@@ -268,6 +268,29 @@ class DownloadQueue:
                 [(dataset, k, priority) for k in keys])
         return len(keys)
 
+    def requeue(self, dataset: str, keys: list[str]) -> int:
+        """Force keys back to PENDING even if they are marked DONE.
+
+        `enqueue` deliberately protects DONE rows - that is what stops the
+        downloader re-fetching history it already holds. But it also meant a
+        session whose rows were later deleted or corrupted could never be
+        downloaded again: the queue insisted it was already done while the
+        database sat empty. Repair needs to override that.
+
+        Attempts are NOT reset, so a date that genuinely cannot be fetched
+        still stops being retried after max_attempts instead of looping
+        forever. Use `reset_failed` to give those another chance.
+        """
+        if not keys:
+            return 0
+        with self.db.tx() as c:
+            cur = c.executemany(
+                "UPDATE download_queue SET status='PENDING',"
+                " updated_at=datetime('now') WHERE dataset=? AND key=?"
+                " AND status='DONE'",
+                [(dataset, k) for k in keys])
+            return cur.rowcount or 0
+
     def pending(self, dataset: str, limit: int = 10_000,
                 max_attempts: int = 3) -> list[str]:
         conn = self.db.connect()

@@ -217,6 +217,16 @@ def run_sync(db, settings, *, period: str = "2y", universe: str = "nifty200",
     q.enqueue("cm_bhavcopy", todo_price, priority=10)
     q.enqueue("index_close", todo_index, priority=20)
 
+    # A date in todo_* means the market was open (or we do not yet know) and
+    # we hold NO data for it. That fact outranks a stale 'DONE' marker left
+    # over from an earlier run whose rows have since been deleted or lost -
+    # otherwise the queue would refuse to ever repair the hole.
+    stats["requeued"] = (q.requeue("cm_bhavcopy", todo_price)
+                         + q.requeue("index_close", todo_index))
+    if stats["requeued"]:
+        say(f"{stats['requeued']} previously downloaded day(s) are missing "
+            f"from the database and will be fetched again.")
+
     pending_price = q.pending("cm_bhavcopy", max_attempts=max_attempts)
     pending_index = q.pending("index_close", max_attempts=max_attempts)
     total = len(pending_price) + len(pending_index)

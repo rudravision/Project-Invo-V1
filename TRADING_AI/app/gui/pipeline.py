@@ -104,9 +104,10 @@ def full_update_job(job, db, settings, *, period="5y", universe="nifty200",
     advance(STEPS[2])
     cal = MarketCalendar(db)
     today = dt.date.today()
-    cal.seed_weekends(today - dt.timedelta(days=366 * 6), today)
+    cal_start = today - dt.timedelta(days=366 * 6)
+    cal.seed_weekends(cal_start, today)
     cal.infer_sessions_from_data()
-    out["calendar"] = cal.summary()
+    out["calendar"] = cal.summary(cal_start, today)
     if stop():
         return out
 
@@ -229,7 +230,8 @@ def repair_job(job, db, settings) -> dict:
     cb("Rebuilding the trading calendar...", 2, 6)
     cal = MarketCalendar(db)
     today = dt.date.today()
-    cal.seed_weekends(today - dt.timedelta(days=366 * 6), today)
+    cal_start = today - dt.timedelta(days=366 * 6)
+    cal.seed_weekends(cal_start, today)
     cal.infer_sessions_from_data()
     SymbolLifecycle(db).rebuild()
 
@@ -238,14 +240,22 @@ def repair_job(job, db, settings) -> dict:
     before = gap.summary()
 
     cb("Downloading what is genuinely missing...", 4, 6)
-    start, end = gap.start, gap.end
-    plan = plan_repair(db, gap, start, end)
+    plan = plan_repair(db, gap, cal_start, today)
     q = DownloadQueue(db)
-    q.enqueue(plan.dates_to_fetch, reason="repair")
+    for dataset, keys, prio in (("cm_bhavcopy", plan.refetch_sessions, 10),
+                                ("cm_bhavcopy", plan.verify_dates, 50),
+                                ("index_close", plan.need_index, 20)):
+        q.enqueue(dataset, keys, priority=prio)
+        q.requeue(dataset, keys)      # override stale DONE markers
+    q.reset_failed("cm_bhavcopy")
+    q.reset_failed("index_close")
+    out_plan = {"refetch_sessions": len(plan.refetch_sessions),
+                "verify_dates": len(plan.verify_dates),
+                "need_index": len(plan.need_index)}
     try:
         from scripts.sync_data import run_sync
         run_sync(db, settings, period="max",
-                 progress=lambda m, c=None, t=None: cb(m, None, None),
+                 progress=lambda m, c=None, t=None: cb(m, c, t),
                  should_stop=stop)
     except Exception as e:  # noqa: BLE001
         job.steps.append(f"Download step failed: {e}")
@@ -256,7 +266,7 @@ def repair_job(job, db, settings) -> dict:
     rep = validate_daily_v2(daily, db, run_gap_analysis=True) \
         if not daily.empty else None
     cb("Repair finished.", 6, 6)
-    return {"before": before, "after": after,
+    return {"before": before, "after": after, "plan": out_plan,
             "quality_ok": bool(rep and rep.ok),
             "quality": explain_for_humans(rep) if rep else []}
 

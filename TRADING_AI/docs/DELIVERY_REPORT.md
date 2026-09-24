@@ -21,6 +21,28 @@ corrupted — it was **incomplete, and the system could not tell the difference
 between a market holiday, a failed download, and a stock that simply was not
 listed yet.**
 
+### Found on your machine, first click (24 Sep 2026)
+
+Your first press of UPDATE & ANALYZE MARKET crashed at step 3 of 11 with
+`TypeError: MarketCalendar.summary() missing 2 required positional
+arguments`. My mistake. Three more wrong calls were hiding behind it in the
+REPAIR DATA job (`gap.start`, `gap.end`, and a bad queue call).
+
+The reason none of my tests caught them: **the API tests never actually ran
+the update chain.** They tested every endpoint around it. Fixed by adding
+`tests/test_pipeline_jobs.py`, which executes the real job functions
+end to end against a stubbed NSE, so every call inside them is made.
+
+That new test immediately exposed a **worse, silent bug**: REPAIR DATA did
+not repair anything. The download queue marks a date `DONE` once fetched and
+never fetches it again — which is exactly what makes downloads incremental,
+but it also meant that if a day's data was **deleted or corrupted, it could
+never be recovered.** The queue insisted the day was done while the database
+sat empty. Fixed with an explicit `requeue()` override: if a trading session
+has no data, that fact now outranks a stale `DONE` marker. The attempt
+counter is deliberately *not* reset, so a day that genuinely cannot be
+fetched still stops being retried instead of looping forever.
+
 Two further problems were found while building the rest of the system:
 
 - **Staleness could be hidden by a stale calendar.** The new validator
