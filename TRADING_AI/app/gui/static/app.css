@@ -211,3 +211,25 @@ pre{background:#0a0d13;border:1px solid var(--line);border-radius:6px;padding:12
 .advice.good{background:#11251a;border:1px solid #1f5c3a}
 .advice.warn{background:#2a2312;border:1px solid #6d5a2a}
 .advice.bad{background:#2a1417;border:1px solid #6d2a2a}
+
+/* ---- simple mode: Today page ---- */
+.advtoggle{margin:14px 10px 6px;background:none;border:1px solid #21283a;
+  color:#8b9ab2;border-radius:8px;padding:7px 10px;font-size:12px;
+  cursor:pointer;width:calc(100% - 20px);text-align:left}
+.advtoggle:hover{border-color:#31405c;color:#c7d3e6}
+.advnav{border-left:2px solid #21283a;margin-left:14px}
+.big-status{border-radius:12px;padding:18px 20px;margin-bottom:16px;
+  display:flex;gap:16px;align-items:flex-start}
+.big-status .dot{width:16px;height:16px;border-radius:50%;flex:0 0 auto;
+  margin-top:4px}
+.big-status h2{margin:0 0 6px;font-size:21px}
+.big-status p{margin:0;font-size:14px;line-height:1.55;color:#c2cde0}
+.big-status.ok{background:#11251a;border:1px solid #1f5c3a}
+.big-status.ok .dot{background:#3fb96b}
+.big-status.warn{background:#2a2312;border:1px solid #6d5a2a}
+.big-status.warn .dot{background:#d9a441}
+.big-status.bad{background:#2a1417;border:1px solid #6d2a2a}
+.big-status.bad .dot{background:#d2544f}
+.act{margin:0 0 18px}
+.act .btn{font-size:15px;padding:12px 22px}
+#todayHeading{margin:6px 0 10px}

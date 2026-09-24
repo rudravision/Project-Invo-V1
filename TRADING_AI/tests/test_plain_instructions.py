@@ -213,3 +213,48 @@ def test_api_switches_to_paper_mode_after_a_losing_backtest(real_names,
     for x in r["long"] + r["short"]:
         assert x["plain"]["tradeable"] is False
         assert x["plain"]["headline"].startswith("DO NOT TRADE")
+
+
+# --------------------------------------------------- the simple screen ----
+def _html():
+    return (ROOT / "app" / "gui" / "static" / "index.html").read_text(
+        encoding="utf-8")
+
+
+def _js():
+    return (ROOT / "app" / "gui" / "static" / "app.js").read_text(
+        encoding="utf-8")
+
+
+def test_today_is_the_first_page_a_user_sees():
+    h = _html()
+    assert 'id="page-today"' in h
+    assert 'class="page active" id="page-today"' in h
+    assert 'class="nav active" data-page="today"' in h
+
+
+def test_only_three_items_are_visible_before_more_options():
+    """A beginner should not meet ten pages on launch."""
+    h = _html()
+    top = h.split('id="advToggle"')[0]
+    visible = top.count('class="nav')
+    assert visible == 3, f"expected Today/Charts/Settings, found {visible}"
+    # the technical pages must still exist, just tucked away
+    hidden = h.split('id="advNav"')[1]
+    for page in ("heatmap", "backtest", "sources", "logs", "backups"):
+        assert f'data-page="{page}"' in hidden
+
+
+def test_today_page_wires_up_its_buttons():
+    js = _js()
+    assert "function loadToday()" in js
+    assert 'if (page === "today") loadToday();' in js
+    # the action buttons must be bound to real jobs, not decorative
+    assert js.count("bindToday();") >= 3
+
+
+def test_today_uses_the_plain_cards_not_the_technical_grid():
+    js = _js()
+    today = js.split("function loadTodayIdeas()")[1].split("\n  function ")[0]
+    assert "pcard" in today          # plain instruction cards
+    assert "cell(" not in today      # never the raw RSI/MACD grid

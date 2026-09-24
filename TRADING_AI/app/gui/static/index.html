@@ -17,16 +17,20 @@
 
 <div id="shell">
   <nav id="sidebar">
-    <a class="nav active" data-page="dashboard"><i>▤</i>Dashboard</a>
-    <a class="nav" data-page="heatmap"><i>▦</i>Sector Heatmap</a>
-    <a class="nav" data-page="trades"><i>▲</i>Trade Ideas</a>
+    <a class="nav active" data-page="today"><i>★</i>Today</a>
     <a class="nav" data-page="chart"><i>◪</i>Charts</a>
-    <a class="nav" data-page="backtest"><i>◷</i>Backtest</a>
-    <a class="nav" data-page="sources"><i>◈</i>Data Sources</a>
     <a class="nav" data-page="settings"><i>⚙</i>Settings</a>
-    <a class="nav" data-page="telegram"><i>✈</i>Telegram</a>
-    <a class="nav" data-page="backups"><i>⛃</i>Backups</a>
-    <a class="nav" data-page="logs"><i>≡</i>Logs</a>
+    <button id="advToggle" class="advtoggle">More options ▾</button>
+    <div id="advNav" class="advnav hidden">
+      <a class="nav" data-page="dashboard"><i>▤</i>Dashboard</a>
+      <a class="nav" data-page="heatmap"><i>▦</i>Sector Heatmap</a>
+      <a class="nav" data-page="trades"><i>▲</i>Trade Ideas (detailed)</a>
+      <a class="nav" data-page="backtest"><i>◷</i>Backtest</a>
+      <a class="nav" data-page="sources"><i>◈</i>Data Sources</a>
+      <a class="nav" data-page="telegram"><i>✈</i>Telegram</a>
+      <a class="nav" data-page="backups"><i>⛃</i>Backups</a>
+      <a class="nav" data-page="logs"><i>≡</i>Logs</a>
+    </div>
     <div class="spacer"></div>
     <button id="bigButton" class="bigbtn">UPDATE &amp; ANALYZE MARKET</button>
     <div id="jobBox" class="jobbox hidden">
@@ -41,7 +45,15 @@
   <main id="main">
 
     <!-- ================================================= DASHBOARD -->
-    <section class="page active" id="page-dashboard">
+    <section class="page active" id="page-today">
+      <div id="todayStatus"></div>
+      <div id="todayAction"></div>
+      <h2 id="todayHeading">What to do</h2>
+      <div id="todayIdeas"></div>
+      <div id="todayFooter"></div>
+    </section>
+
+    <section class="page" id="page-dashboard">
       <div id="gateBanner"></div>
 
       <div class="cards">

@@ -78,6 +78,7 @@
   }
 
   function load(page) {
+    if (page === "today") loadToday();
     if (page === "dashboard") refreshStatus();
     if (page === "heatmap") loadHeatmap();
     if (page === "trades") loadTrades();
@@ -93,6 +94,101 @@
     $("#clock").textContent = new Date().toLocaleString("en-IN",
       { dateStyle: "medium", timeStyle: "short" });
   }, 1000);
+
+
+  /* ------------------------------------------------------------ TODAY */
+  // One screen that answers three questions and nothing else:
+  //   Is the data OK?  What do I do?  Why?
+  function loadToday() {
+    api("/api/status").then(function (s) {
+      var gateOk = s.gate && s.gate.status === "ok";
+      var reasons = (s.gate && s.gate.reasons) || [];
+      var when = (s.coverage && s.coverage.end) || "an unknown date";
+
+      if (!s.coverage || !s.coverage.rows) {
+        paintStatus("bad", "Nothing downloaded yet",
+          "Press the blue button to download prices for the first time. " +
+          "It can take a while the first time only.");
+        $("#todayAction").innerHTML = actionBtn("update",
+          "DOWNLOAD MARKET DATA");
+        bindToday();
+        $("#todayHeading").textContent = "";
+        $("#todayIdeas").innerHTML = "";
+        return;
+      }
+
+      if (!gateOk) {
+        paintStatus("bad", "Not safe to trade from this data",
+          (reasons[0] && reasons[0].detail)
+            ? reasons[0].detail
+            : "Something is wrong with the downloaded prices, so no trade " +
+              "ideas will be shown. This is deliberate.");
+        $("#todayAction").innerHTML = actionBtn("repair", "FIX THE DATA") +
+          actionBtn("update", "TRY DOWNLOADING AGAIN", "ghost");
+        bindToday();
+        $("#todayHeading").textContent = "";
+        $("#todayIdeas").innerHTML = "";
+        $("#todayFooter").innerHTML = "";
+        return;
+      }
+
+      paintStatus("ok", "Data looks good",
+        "Prices are up to date to " + esc(String(when)) + ". " +
+        (s.market ? "The market is " + esc(String(s.market).toLowerCase()) +
+          " overall." : ""));
+      $("#todayAction").innerHTML = actionBtn("update",
+        "UPDATE & ANALYZE MARKET");
+      bindToday();
+      loadTodayIdeas();
+    }).catch(function (e) {
+      paintStatus("bad", "The program could not read its own data",
+        e.message || "Unknown problem.");
+    });
+  }
+
+  function paintStatus(tone, title, text) {
+    $("#todayStatus").innerHTML =
+      "<div class='big-status " + tone + "'><div class='dot'></div>" +
+      "<div><h2>" + esc(title) + "</h2><p>" + esc(text) + "</p></div></div>";
+  }
+
+  function bindToday() {
+    $$("[data-run]", $("#todayAction")).forEach(bindRun);
+  }
+
+  function actionBtn(action, label, cls) {
+    return "<span class='act'><button class='btn " + (cls || "") +
+      "' data-run='" + action + "'>" + esc(label) + "</button></span> ";
+  }
+
+  function loadTodayIdeas() {
+    api("/api/recommendations").then(function (d) {
+      var a = d.advice;
+      if (a) {
+        $("#todayFooter").innerHTML = "<div class='advice " + esc(a.tone) +
+          "'><h4>" + esc(a.title) + "</h4><p>" + esc(a.text) + "</p></div>";
+      }
+      if (d.blocked) {
+        $("#todayHeading").textContent = "";
+        $("#todayIdeas").innerHTML = "";
+        return;
+      }
+      var all = (d.long || []).concat(d.short || []);
+      if (!all.length) {
+        $("#todayHeading").textContent = "What to do today";
+        $("#todayIdeas").innerHTML = "<div class='empty'>Nothing worth " +
+          "trading today. Doing nothing costs you nothing.</div>";
+        return;
+      }
+      $("#todayHeading").textContent = "What to do today";
+      $("#todayIdeas").innerHTML = all.map(pcard).join("");
+      $$("[data-sym]", $("#todayIdeas")).forEach(function (t) {
+        t.onclick = function () {
+          go("chart"); $("#chartSym").value = t.dataset.sym; drawChart();
+        };
+      });
+    }).catch(function () { });
+  }
 
   /* ---------------------------------------------------------- status */
   function refreshStatus() {
@@ -514,6 +610,15 @@
   function cell(l, v) {
     return "<div><div class='l'>" + esc(l) + "</div><div class='x'>" + v + "</div></div>";
   }
+  var advT = $("#advToggle");
+  if (advT) {
+    advT.onclick = function () {
+      var box = $("#advNav");
+      var open = box.classList.toggle("hidden") === false;
+      advT.textContent = open ? "More options ▴" : "More options ▾";
+    };
+  }
+
   var sm = $("#simpleMode");
   if (sm) {
     SIMPLE = localStorage.getItem("simpleMode") !== "0";
