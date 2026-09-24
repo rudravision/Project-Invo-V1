@@ -190,3 +190,24 @@ pre{background:#0a0d13;border:1px solid var(--line);border-radius:6px;padding:12
 .chk.fail .ic{color:#d2544f}
 .chk.unknown .ic{color:#7a869a}
 .chk.unknown .lb{color:#8b9ab2}
+
+/* ---- beginner / simple view ---- */
+.simpletoggle{display:inline-flex;gap:8px;align-items:center;margin:4px 0 14px;
+  font-size:13px;color:#9fb0c9;cursor:pointer}
+.plain{padding:14px 16px}
+.plain .head{font-size:17px;font-weight:700;line-height:1.45;color:#eaf1ff;
+  margin-bottom:10px}
+.plain .head.no{color:#e8918c}
+.plain ol{margin:0 0 12px;padding-left:20px}
+.plain ol li{margin:7px 0;font-size:14px;line-height:1.5;color:#cfdaec}
+.plain .conf,.plain .chk2{font-size:13px;line-height:1.5;color:#9fb0c9;
+  margin:8px 0}
+.plain .warn2{background:#2a1417;border:1px solid #6d2a2a;border-radius:8px;
+  padding:9px 12px;margin:8px 0;font-size:13px;color:#f0c8c5}
+.plain .paper{background:#2a2312;border-color:#6d5a2a;color:#f2e2b8}
+.advice{border-radius:10px;padding:12px 16px;margin:0 0 14px}
+.advice h4{margin:0 0 6px;font-size:15px}
+.advice p{margin:0;font-size:13px;line-height:1.55}
+.advice.good{background:#11251a;border:1px solid #1f5c3a}
+.advice.warn{background:#2a2312;border:1px solid #6d5a2a}
+.advice.bad{background:#2a1417;border:1px solid #6d2a2a}

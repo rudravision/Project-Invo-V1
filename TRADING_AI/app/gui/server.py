@@ -27,6 +27,7 @@ from app.analytics.indices import (display as idx_display, is_broad,
                                    sector_label)
 from app.analytics.probability import Calibrator, MODEL_VERSION
 from app.analytics.ranking import RankConfig, rank_stocks, sector_heatmap
+from app.analytics.plain import instruction, session_advice, INTRADAY_NOTE
 from app.analytics.recommend import (RiskSettings, generate_candidates,
                                      portfolio_summary)
 from app.core.config import load_settings
@@ -159,6 +160,24 @@ def _recent_announcements(db, sessions: int = 7) -> dict[str, int] | None:
     finally:
         conn.close()
     return {r["symbol"]: int(r["n"]) for r in rows}
+
+
+def _strategy_verdict(settings) -> bool | None:
+    """Did the last backtest on this user's own data make money?
+
+    True / False / None (never run). Used to decide whether trade ideas are
+    presented as instructions or as paper practice. A losing strategy must
+    not hand a beginner a tidy one-line order.
+    """
+    try:
+        files = sorted((settings.root / "backtests").glob("*_stats.json"))
+        if not files:
+            return None
+        data = json.loads(files[-1].read_text(encoding="utf-8"))
+        r = data.get("total_return_pct")
+        return None if r is None else bool(float(r) > 0)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _quarantine_note(q: dict) -> dict:
@@ -514,6 +533,9 @@ def create_app(root: str | None = None) -> Flask:
                           "UPDATE & ANALYZE MARKET.")
             return jsonify({"blocked": True, "reason": reason,
                             "rows_total": total_rows, "rows_usable": 0,
+                            "advice": {"tone": "bad",
+                                       "title": "No trades yet",
+                                       "text": reason},
                             "long": [], "short": []})
 
         rep = validate_daily_v2(daily, db, run_gap_analysis=True)
@@ -561,11 +583,29 @@ def create_app(root: str | None = None) -> Flask:
             delivery=deliv, announcements=_recent_announcements(db),
             top_n=5)
 
+        # Plain-language instruction for each idea, gated on whether the
+        # strategy has actually been shown to make money.
+        profitable = _strategy_verdict(settings)
+        calibrated = bool(cal.summary().get("usable_buckets"))
+        longs, shorts = [], []
+        for key, dest in (("long", longs), ("short", shorts)):
+            for c in cands[key]:
+                d = c.to_dict()
+                d["plain"] = instruction(
+                    d, strategy_is_profitable=profitable,
+                    calibrated=calibrated).to_dict()
+                dest.append(d)
+
         return jsonify(_clean({
             "blocked": False,
             "market_trend": market_trend,
-            "long": [c.to_dict() for c in cands["long"]],
-            "short": [c.to_dict() for c in cands["short"]],
+            "advice": session_advice(blocked=False,
+                                     strategy_is_profitable=profitable,
+                                     n_long=len(longs), n_short=len(shorts)),
+            "strategy_profitable": profitable,
+            "intraday_note": INTRADAY_NOTE,
+            "long": longs,
+            "short": shorts,
             "portfolio": portfolio_summary(cands, rs),
             "risk": rs.to_dict(),
             "calibration": cal.summary(),

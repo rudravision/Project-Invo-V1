@@ -363,9 +363,14 @@
             return k + ": " + q.reasons[k];
           }).join(" · ")) + "</p></div>"
         : "";
-      $("#longs").innerHTML = d.long.length ? d.long.map(tcard).join("")
+      var render = SIMPLE ? pcard : tcard;
+      var adv = d.advice;
+      $("#sessionAdvice").innerHTML = adv
+        ? "<div class='advice " + esc(adv.tone) + "'><h4>" + esc(adv.title) +
+          "</h4><p>" + esc(adv.text) + "</p></div>" : "";
+      $("#longs").innerHTML = d.long.length ? d.long.map(render).join("")
         : "<div class='empty'>No long candidate passes the filters today.</div>";
-      $("#shorts").innerHTML = d.short.length ? d.short.map(tcard).join("")
+      $("#shorts").innerHTML = d.short.length ? d.short.map(render).join("")
         : "<div class='empty'>No short candidate passes the filters today.</div>";
       var p = d.portfolio || {};
       $("#portfolio").innerHTML =
@@ -385,6 +390,34 @@
   function item(l, v) {
     return "<div class='item'><span class='kk'>" + esc(l) + "</span><b>" + v + "</b></div>";
   }
+  var SIMPLE = true;
+
+  // Beginner card: the instruction in words, with rupee amounts.
+  function pcard(c) {
+    var p = c.plain;
+    if (!p) return tcard(c);
+    var h = "<div class='tcard " + c.side + "'><div class='plain'>" +
+      "<div class='head" + (p.tradeable ? "" : " no") + "'>" +
+      esc(p.headline) + "</div>";
+    if (p.steps && p.steps.length) {
+      h += "<ol>" + p.steps.map(function (s) {
+        return "<li>" + esc(s.replace(/^\d+\.\s*/, "")) + "</li>";
+      }).join("") + "</ol>";
+    }
+    (p.warnings || []).forEach(function (w) {
+      h += "<div class='warn2" + (/paper|backtest/i.test(w) ? " paper" : "") +
+        "'>" + esc(w) + "</div>";
+    });
+    h += "<div class='conf'><b>How sure is this?</b> " + esc(p.confidence) +
+      "</div>";
+    h += "<div class='chk2'><b>Cross-checks:</b> " + esc(p.checks) + "</div>";
+    h += "<div class='muted small'>Horizon: " + esc(p.horizon) + "</div>";
+    h += "<details class='confirms'><summary>Show the technical numbers" +
+      "</summary>" + tcard(c) + "</details>";
+    h += "</div></div>";
+    return h;
+  }
+
   function tcard(c) {
     var pr = c.probability;
     var probHtml = pr.available
@@ -481,6 +514,17 @@
   function cell(l, v) {
     return "<div><div class='l'>" + esc(l) + "</div><div class='x'>" + v + "</div></div>";
   }
+  var sm = $("#simpleMode");
+  if (sm) {
+    SIMPLE = localStorage.getItem("simpleMode") !== "0";
+    sm.checked = SIMPLE;
+    sm.onchange = function () {
+      SIMPLE = sm.checked;
+      localStorage.setItem("simpleMode", SIMPLE ? "1" : "0");
+      loadTrades();
+    };
+  }
+
   $("#saveRisk").onclick = function () {
     post("/api/settings", {
       capital: +$("#r-capital").value, risk_per_trade_pct: +$("#r-risk").value,
