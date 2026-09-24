@@ -278,6 +278,10 @@ def _stats(eq: pd.Series, trades: pd.DataFrame, cfg: BacktestConfig,
         "avg_win_pct": (float(np.mean(wins)) * 100) if wins else 0.0,
         "avg_loss_pct": (float(np.mean(losses)) * 100) if losses else 0.0,
         "profit_factor": (gross_win / gross_loss) if gross_loss > 0 else float("inf"),
+        "worst_day_pct": float(eq.pct_change().min() * 100)
+                         if len(eq) > 1 else 0.0,
+        "worst_day_date": (str(eq.pct_change().idxmin().date())
+                           if len(eq) > 1 else None),
         "total_costs": float(total_costs),
         "cost_drag_pct": float(total_costs / cfg.initial_capital * 100),
     }

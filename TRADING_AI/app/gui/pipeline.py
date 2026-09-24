@@ -24,6 +24,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from app.analytics.indices import pick_row, sector_label
+from app.data.frames import exclusion_note, load_daily
 from app.analytics.probability import (Calibrator, build_calibration,
                                        persist_calibration)
 from app.analytics.ranking import RankConfig, rank_stocks, sector_heatmap
@@ -54,12 +55,17 @@ STEPS = [
 ]
 
 
-def _load(db):
+def _load(db, *, clean: bool = True):
+    """Prices for analysis, plus the index/sector context.
+
+    `clean` applies the shared rules in app/data/frames.py: adjusted series
+    preferred, quarantined stocks dropped. The excluded stocks are returned
+    so the caller can report them.
+    """
+    daily, excluded = load_daily(db, adjusted=clean,
+                                 exclude_quarantined=clean, real_only=True)
     conn = db.connect()
     try:
-        daily = pd.read_sql_query(
-            "SELECT symbol,date,open,high,low,close,volume,is_synthetic"
-            " FROM daily_ohlc WHERE is_synthetic=0 ORDER BY symbol,date", conn)
         idx = pd.read_sql_query(
             "SELECT index_name,date,close,is_synthetic FROM index_ohlc"
             " WHERE is_synthetic=0 ORDER BY index_name,date", conn)
@@ -71,6 +77,7 @@ def _load(db):
             "(SELECT MAX(date) FROM delivery)").fetchall())
     finally:
         conn.close()
+    _load.last_excluded = excluded
     return daily, idx, sectors, deliv
 
 
@@ -279,6 +286,7 @@ def run_backtest_job(job, db, settings, body: dict) -> dict:
     job.total = 4
     cb("Loading price history...", 0, 4)
     daily, idx, sectors, _ = _load(db)
+    excluded = getattr(_load, "last_excluded", {})
     if daily.empty:
         raise ValueError("There is no real market data to backtest.")
 
@@ -319,7 +327,11 @@ def run_backtest_job(job, db, settings, body: dict) -> dict:
         res.trades.to_csv(bdir / f"{stamp}_trades.csv", index=False)
 
     cb("Done.", 4, 4)
-    return {"stats": res.stats, "file": f"{stamp}_stats.json",
+    stats = dict(res.stats)
+    stats["excluded_symbols"] = sorted(excluded)
+    stats["excluded_note"] = exclusion_note(excluded)
+    return {"stats": stats, "file": f"{stamp}_stats.json",
+            "excluded": stats["excluded_note"],
             "is_synthetic": res.is_synthetic, "report": res.report()}
 
 

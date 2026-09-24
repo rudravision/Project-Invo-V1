@@ -401,3 +401,56 @@ def test_unknown_symbol_says_so_plainly(real_names):
     body = j(c.get("/api/chart/ZZZZ?range=1M"))
     assert "No stock matches" in body["error"]
     assert body["suggestions"] == []
+
+
+# ------------------------------- backtest sees the same clean prices ------
+def test_backtest_loader_drops_quarantined_stocks(real_names):
+    """The backtest used to trade the fake 60% crash and ruin its own curve."""
+    from app.data.frames import exclusion_note, load_daily
+    c, app, days = real_names
+    _add_split_jump(app, days, "T03")
+    db = app.config["DB"]
+
+    raw, none_excluded = load_daily(db, adjusted=False,
+                                    exclude_quarantined=False)
+    clean, excluded = load_daily(db, real_only=True)
+
+    assert none_excluded == {}
+    assert set(excluded) == {"T03"}
+    assert "T03" in set(raw["symbol"])
+    assert "T03" not in set(clean["symbol"])
+    assert "T03" in exclusion_note(excluded)
+
+
+def test_shared_loader_overlays_adjusted_prices(real_names):
+    from app.data.frames import load_daily
+    c, app, days = real_names
+    expected = _write_adjusted(app, days, "T00", factor=0.25)
+    clean, _ = load_daily(app.config["DB"], real_only=True)
+    got = clean[clean["symbol"] == "T00"]["close"].tolist()
+    assert got[-1] == pytest.approx(expected[-1], rel=1e-6)
+    # and the other stocks survive the overlay
+    assert len(set(clean["symbol"])) == 12
+
+
+def test_backtest_reports_what_it_left_out(real_names, tmp_path):
+    from app.gui.jobs import Job
+    from app.gui.pipeline import run_backtest_job
+    c, app, days = real_names
+    _add_split_jump(app, days, "T03")
+    job = Job(id="backtest", name="backtest")
+    out = run_backtest_job(job, app.config["DB"], app.config["SETTINGS"],
+                           {"warmup": 130, "top_n": 3})
+    assert out["stats"]["excluded_symbols"] == ["T03"]
+    assert "T03" in out["excluded"]
+
+
+def test_backtest_reports_its_worst_day(real_names):
+    from app.gui.jobs import Job
+    from app.gui.pipeline import run_backtest_job
+    c, app, days = real_names
+    job = Job(id="backtest", name="backtest")
+    out = run_backtest_job(job, app.config["DB"], app.config["SETTINGS"],
+                           {"warmup": 130, "top_n": 3})
+    assert out["stats"]["worst_day_pct"] <= 0
+    assert out["stats"]["worst_day_date"]

@@ -494,18 +494,47 @@
         "initial_capital", "final_equity", "total_return_pct", "cagr_pct",
         "ann_vol_pct", "sharpe", "sortino", "max_drawdown_pct",
         "win_rate_pct", "avg_win_pct", "avg_loss_pct", "profit_factor",
-        "expectancy_pct", "total_costs", "cost_drag_pct",
+        "expectancy_pct", "worst_day_pct", "worst_day_date",
+        "total_costs", "cost_drag_pct",
         "benchmark_return_pct", "excess_vs_bench_pct"];
+      var LABEL = {
+        profit_factor: "Profit Factor (before costs)",
+        total_costs: "Total Costs (₹)",
+        cost_drag_pct: "Cost Drag % of Capital",
+        total_return_pct: "Total Return % (after costs)",
+        cagr_pct: "Return Per Year % (after costs)",
+        max_drawdown_pct: "Worst Fall From Peak %",
+        win_rate_pct: "Winning Trades %",
+        worst_day_pct: "Worst Single Day %",
+        worst_day_date: "Worst Single Day"
+      };
       var h = "<div class='kv wide'>";
       order.forEach(function (k) {
         if (b[k] === undefined || b[k] === null) return;
         var v = typeof b[k] === "number" ? Number(b[k]).toLocaleString("en-IN",
           { maximumFractionDigits: 2 }) : b[k];
-        h += item(k.replace(/_/g, " ").replace(/\b\w/g, function (m) {
+        h += item(LABEL[k] || k.replace(/_/g, " ").replace(/\b\w/g, function (m) {
           return m.toUpperCase();
         }), v);
       });
       h += "</div>";
+      // Say out loud whether this strategy actually made money.
+      if (typeof b.total_return_pct === "number") {
+        var lost = b.total_return_pct <= 0;
+        h = "<div class='banner " + (lost ? "warn" : "good") + "'><h4>" +
+          (lost ? "This strategy lost money over the test period"
+                : "This strategy made money over the test period") +
+          "</h4><p>" +
+          Number(b.total_return_pct).toFixed(2) + "% after all costs" +
+          (typeof b.cost_drag_pct === "number"
+            ? ", with costs alone taking " + Number(b.cost_drag_pct).toFixed(2) +
+              "% of your capital" : "") +
+          ". " + (lost ? "Do not trade it as it stands." : "") +
+          "</p></div>" + h;
+      }
+      if (b.excluded_note) {
+        h += "<p class='muted small'>" + esc(b.excluded_note) + "</p>";
+      }
       if (b.is_synthetic) {
         h = "<div class='banner error'><h4>Practice data</h4><p>These numbers " +
           "come from synthetic data and mean nothing about the real market.</p></div>" + h;

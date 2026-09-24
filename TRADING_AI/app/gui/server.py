@@ -31,6 +31,7 @@ from app.analytics.recommend import (RiskSettings, generate_candidates,
                                      portfolio_summary)
 from app.core.config import load_settings
 from app.data.calendar import MarketCalendar, SymbolLifecycle
+from app.data.frames import load_daily
 from app.data.corporate_actions import (quarantine_summary,
                                         quarantined_symbols,
                                         symbols_with_extreme_jumps,
@@ -206,33 +207,14 @@ def create_app(root: str | None = None) -> Flask:
             max_position_pct=float(s["max_position_pct"]))
 
     def load_frames(adjusted: bool = True):
-        """Load prices. Uses the corporate-action adjusted series when one
-        has been built, because indicators computed across an unadjusted
-        split are simply wrong. Falls back to raw prices otherwise."""
+        """Prices for analysis, using the shared rules in app/data/frames.py.
+
+        Quarantining is applied by the callers that rank stocks, not here,
+        so the dashboard can still count and report the excluded stocks.
+        """
+        daily, _ = load_daily(db, adjusted=adjusted, exclude_quarantined=False)
         conn = db.connect()
         try:
-            daily = pd.read_sql_query(
-                "SELECT symbol,date,open,high,low,close,volume,is_synthetic"
-                " FROM daily_ohlc ORDER BY symbol,date", conn)
-            if adjusted:
-                # Overlay the split-adjusted series for the stocks that have
-                # one. Only an overlay, never a replacement: swapping the
-                # whole table would silently drop every stock that never
-                # needed an adjustment, which is nearly all of them.
-                try:
-                    adj = pd.read_sql_query(
-                        "SELECT symbol,date,open,high,low,close,volume"
-                        " FROM daily_ohlc_adjusted ORDER BY symbol,date",
-                        conn)
-                except Exception:  # noqa: BLE001
-                    adj = pd.DataFrame()
-                if not adj.empty:
-                    adj["is_synthetic"] = 0
-                    keep = daily[~daily["symbol"].isin(set(adj["symbol"]))]
-                    daily = (pd.concat([keep, adj[daily.columns]],
-                                       ignore_index=True)
-                             .sort_values(["symbol", "date"])
-                             .reset_index(drop=True))
             idx = pd.read_sql_query(
                 "SELECT index_name,date,close,change_pct,is_synthetic"
                 " FROM index_ohlc ORDER BY index_name,date", conn)
