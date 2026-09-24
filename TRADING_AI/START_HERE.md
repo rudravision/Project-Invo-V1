@@ -32,12 +32,45 @@ Plug in your SanDisk SSD. Copy the whole `TRADING_AI` folder onto it.
 Anywhere on the drive is fine. It does not matter what drive letter Windows
 gives it (`D:`, `E:`, `F:`…) — the system works that out by itself, every time.
 
-### Step 2 — Double-click `CLICK_ME_FIRST.bat`
+### Step 2 — Double-click `INSTALL.bat`
 
-That is the only file you ever need to open.
+Once only. It spends 2–5 minutes installing itself **on the SSD**, so your
+computer's own disk stays clean, and puts a **TRADING_AI** shortcut on your
+desktop.
 
-The first time, it spends 2–5 minutes installing itself. It puts everything
-**on the SSD**, so your computer's own disk stays clean.
+### Step 3 — Double-click `TRADING_AI` on your desktop
+
+A window opens. That is the whole program. There are no commands to type.
+
+Inside it:
+
+1. Click the big blue **UPDATE & ANALYZE MARKET** button. It does everything
+   in one go — checks your internet, downloads the days you are missing,
+   checks the data, works out the sectors and the rankings, and saves a
+   report. A progress bar tells you where it is. The window stays usable the
+   whole time, and you can press **Stop**.
+2. **Dashboard** — NIFTY 50, whether the market is rising or falling, how many
+   stocks are up versus down, strongest and weakest sector, and whether your
+   data is healthy.
+3. **Sector Heatmap** — green is strong, red is weak. Click any sector to see
+   its stocks ranked strongest to weakest.
+4. **Trade Ideas** — top long candidates and top short candidates, each with
+   entry, stop loss, target, how many shares to buy, and how much money is at
+   risk.
+5. **Charts** — click any stock symbol anywhere in the app.
+
+**If anything is wrong**, the dashboard tells you in plain English with a
+button to fix it. You will never see a message like `missing_candles: 7600`;
+you will see "Historical database is incomplete" and a **REPAIR DATA** button.
+
+**About the percentages.** Where you see something like "54% — based on 1,240
+historical observations", that number is how often setups with that same score
+actually rose the next day, measured on data the model had never seen. Where
+there is not enough evidence, it says **"Insufficient data"** rather than
+inventing a number. Nothing here guarantees a profit.
+
+The old `CLICK_ME_FIRST.bat` menu still works if you prefer it, and the
+command-line scripts are all still there for troubleshooting.
 
 > **If it says Python is not installed:** it will show you exactly what to do.
 > Python is free, from python.org. One thing matters: during installation,
