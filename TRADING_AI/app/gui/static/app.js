@@ -31,7 +31,11 @@
   function api(path, opts) {
     return fetch(path, opts).then(function (r) {
       return r.json().then(function (j) {
-        if (!r.ok) throw new Error(j.error || j.message || ("HTTP " + r.status));
+        if (!r.ok) {
+          var err = new Error(j.error || j.message || ("HTTP " + r.status));
+          err.suggestions = j.suggestions || [];
+          throw err;
+        }
         return j;
       });
     });
@@ -432,6 +436,18 @@
     };
   });
   $("#loadChart").onclick = drawChart;
+  var symbolsLoaded = false;
+  function loadSymbolList() {
+    if (symbolsLoaded) return;
+    symbolsLoaded = true;
+    api("/api/symbols").then(function (d) {
+      $("#symbolList").innerHTML = (d.symbols || []).map(function (s) {
+        return "<option value='" + esc(s.symbol) + "'>";
+      }).join("");
+    }).catch(function () { symbolsLoaded = false; });
+  }
+  loadSymbolList();
+
   $("#chartSym").addEventListener("keydown", function (e) {
     if (e.key === "Enter") drawChart();
   });
@@ -446,13 +462,18 @@
           item("Suggested entry", "₹" + d.entry) +
           item("Stop loss", "₹" + d.stop) +
           item("Target", "₹" + d.target) +
-          item("Sessions shown", d.dates.length);
+          item("Sessions shown", d.dates.length) +
+          item("Prices", d.price_note || "As reported by NSE");
         window.drawCandles($("#cPrice"), d);
         window.drawVolume($("#cVol"), d);
         window.drawRsi($("#cRsi"), d);
         window.drawMacd($("#cMacd"), d);
         window._lastChart = d;
-      }).catch(function (e) { toast(e.message, "err"); });
+      }).catch(function (e) {
+        var sg = e.suggestions || [];
+        toast(sg.length ? e.message + " Try: " + sg.slice(0, 5).join(", ")
+                        : e.message, "err");
+      });
   }
   window.addEventListener("resize", function () {
     if (window._lastChart && $("#page-chart").classList.contains("active")) {

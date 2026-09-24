@@ -546,6 +546,53 @@ def create_app(root: str | None = None) -> Flask:
         }))
 
     # -------------------------------------------------------------- charts
+    @app.get("/api/symbols")
+    def api_symbols():
+        """Every stock we hold prices for, for the chart picker."""
+        q = (request.args.get("q") or "").strip().upper()
+        conn = db.connect()
+        try:
+            rows = conn.execute(
+                "SELECT d.symbol, COUNT(*) bars, MAX(d.date) last_date"
+                " FROM daily_ohlc d WHERE d.is_synthetic=0"
+                " GROUP BY d.symbol ORDER BY d.symbol"
+            ).fetchall()
+        finally:
+            conn.close()
+        out = [{"symbol": r["symbol"], "bars": r["bars"],
+                "last_date": r["last_date"]} for r in rows]
+        if q:
+            starts = [r for r in out if r["symbol"].startswith(q)]
+            contains = [r for r in out
+                        if q in r["symbol"] and r not in starts]
+            out = starts + contains
+        return jsonify({"count": len(out), "symbols": out})
+
+    def _resolve_symbol(conn, typed: str):
+        """Match what the user typed to a stock we actually hold.
+
+        Someone typing 'rel' means RELIANCE, not nothing at all. Exact match
+        wins; then a unique prefix; then a unique substring. Ambiguous input
+        returns the candidates so the screen can ask.
+        """
+        want = (typed or "").strip().upper()
+        if not want:
+            return None, []
+        names = [r["symbol"] for r in conn.execute(
+            "SELECT DISTINCT symbol FROM daily_ohlc WHERE is_synthetic=0"
+            " ORDER BY symbol").fetchall()]
+        if want in names:
+            return want, []
+        starts = [n for n in names if n.startswith(want)]
+        if len(starts) == 1:
+            return starts[0], []
+        if starts:
+            return None, starts[:12]
+        holds = [n for n in names if want in n]
+        if len(holds) == 1:
+            return holds[0], []
+        return None, holds[:12]
+
     @app.get("/api/chart/<symbol>")
     def api_chart(symbol):
         rng = request.args.get("range", "1Y").upper()
@@ -554,6 +601,14 @@ def create_app(root: str | None = None) -> Flask:
         conn = db.connect()
         adjusted = False
         try:
+            resolved, suggestions = _resolve_symbol(conn, symbol)
+            if resolved is None:
+                return jsonify({
+                    "error": (f"No stock matches '{symbol}'."
+                              if not suggestions else
+                              f"'{symbol}' matches several stocks."),
+                    "suggestions": suggestions}), 404
+            symbol = resolved
             # Chart the split-adjusted series when we have one: moving
             # averages drawn across an unadjusted split are meaningless.
             try:

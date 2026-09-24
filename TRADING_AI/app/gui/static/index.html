@@ -131,7 +131,9 @@
     <section class="page" id="page-chart">
       <h2>Chart</h2>
       <div class="form inline">
-        <label>Symbol<input id="chartSym" placeholder="RELIANCE"></label>
+        <label>Symbol<input id="chartSym" placeholder="Start typing, e.g. REL"
+          list="symbolList" autocomplete="off"></label>
+        <datalist id="symbolList"></datalist>
         <span class="ranges" id="ranges">
           <button class="rb" data-r="1M">1M</button><button class="rb" data-r="3M">3M</button>
           <button class="rb" data-r="6M">6M</button><button class="rb active" data-r="1Y">1Y</button>

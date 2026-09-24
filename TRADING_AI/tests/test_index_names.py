@@ -361,3 +361,43 @@ def test_adjusted_overlay_keeps_every_other_stock(real_names):
     sec = j(c.get("/api/sector/Bank/stocks"))
     assert before >= 12
     assert r["long"] or r["short"] or sec["stocks"]
+
+
+# --------------------------------------------- typing a partial symbol ----
+def test_symbol_list_is_available_for_the_picker(real_names):
+    c, _, _ = real_names
+    d = j(c.get("/api/symbols"))
+    assert d["count"] == 12
+    assert d["symbols"][0]["symbol"] == "T00"
+    assert d["symbols"][0]["bars"] > 0
+
+
+def test_symbol_search_filters(real_names):
+    c, _, _ = real_names
+    d = j(c.get("/api/symbols?q=T0"))
+    assert all(s["symbol"].startswith("T0") for s in d["symbols"])
+
+
+def test_unique_prefix_loads_the_chart(real_names):
+    """Typing 'rel' should find RELIANCE, not fail."""
+    c, _, _ = real_names
+    r = c.get("/api/chart/T11?range=1M")
+    assert r.status_code == 200
+    # a unique prefix resolves to the same stock
+    assert j(c.get("/api/chart/t11?range=1M"))["symbol"] == "T11"
+
+
+def test_ambiguous_input_suggests_candidates(real_names):
+    c, _, _ = real_names
+    r = c.get("/api/chart/T?range=1M")
+    assert r.status_code == 404
+    body = j(r)
+    assert "several" in body["error"]
+    assert len(body["suggestions"]) >= 2
+
+
+def test_unknown_symbol_says_so_plainly(real_names):
+    c, _, _ = real_names
+    body = j(c.get("/api/chart/ZZZZ?range=1M"))
+    assert "No stock matches" in body["error"]
+    assert body["suggestions"] == []
